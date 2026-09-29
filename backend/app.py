@@ -11,6 +11,7 @@ Endpoints (see docs/api.md):
     GET    /memory/{id}     -> query agent_id, returns Place or 404
     PUT    /memory/{id}     -> body Place, path id must match, returns {"id"}
     DELETE /memory/{id}     -> query agent_id, returns {"deleted": true} or 404
+    POST   /meet/swap       -> body agent_id + limit, returns [SwapCandidate]
 
 Run:
     uvicorn backend.app:app --port 8000
@@ -26,7 +27,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from edge.models import Place, validate_str_list, validate_vector
+from edge.models import Place, SwapCandidate, validate_str_list, validate_vector
 from edge.store import PlaceStore
 
 
@@ -82,6 +83,13 @@ class PlaceList(BaseModel):
     places: list[Place]
     next_offset: Any = None
     total: int
+
+
+class MeetSwapRequest(BaseModel):
+    """Pick the small set to send on meeting (Task 6)."""
+
+    agent_id: str = Field(min_length=1)
+    limit: int = Field(default=20, ge=1, le=100)
 
 
 def create_app(storage_root: Path | str | None = None) -> FastAPI:
@@ -191,6 +199,14 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         if not store.delete(place_id):
             raise HTTPException(status_code=404, detail="place not found")
         return {"deleted": True}
+
+    @app.post("/meet/swap", response_model=list[SwapCandidate])
+    def meet_swap(req: MeetSwapRequest) -> list[SwapCandidate]:
+        store = get_store(req.agent_id)
+        try:
+            return store.pick_swap(limit=req.limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return app
 
