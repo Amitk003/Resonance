@@ -26,7 +26,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from edge.models import Place, validate_vector
+from edge.models import Place, validate_str_list, validate_vector
 from edge.store import PlaceStore
 
 
@@ -54,15 +54,8 @@ class SearchRequest(BaseModel):
 
     @field_validator("zones", "sensors")
     @classmethod
-    def _validate_labels(cls, v: Any) -> list[str] | None:
-        if v is None:
-            return None
-        if not isinstance(v, list):
-            raise ValueError("must be a list of strings or omitted")
-        for item in v:
-            if not isinstance(item, str) or not item:
-                raise ValueError("must hold non-empty strings")
-        return v
+    def _validate_labels(cls, v: Any, info: Any) -> list[str] | None:
+        return validate_str_list(v, info.field_name)
 
     @model_validator(mode="after")
     def _validate_window(self) -> SearchRequest:
