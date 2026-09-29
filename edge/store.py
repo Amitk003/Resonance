@@ -30,6 +30,7 @@ from qdrant_client.models import (
 
 from edge.config import COLLECTION_NAME, DIM, agent_path
 from edge.models import (
+    HAZARD_KEYWORD,
     Payload,
     Place,
     Pose,
@@ -116,6 +117,11 @@ _PAYLOAD_INDEXES: dict[str, str] = {
     "zone": "keyword",
     "sensor": "keyword",
 }
+
+
+# Page size for full-store scans (pick_swap, clear). Small enough to
+# stay light, large enough to keep round trips low.
+_SCAN_PAGE: int = 256
 
 
 class PlaceStore:
@@ -339,6 +345,10 @@ class PlaceStore:
 
         Recent plus high value first: hazard note, then confidence,
         then timestamp. Returns slim SwapCandidate records only.
+
+        Note: exact top-k needs one full scan plus an in-memory sort,
+        so this is O(n) memory. Fine for edge stores; revisit only if
+        a single robot ever holds tens of thousands of places.
         """
         if (
             not isinstance(limit, int)
@@ -349,13 +359,13 @@ class PlaceStore:
         places: list[Place] = []
         offset = None
         while True:
-            page, offset = self.list_places(limit=256, offset=offset)
+            page, offset = self.list_places(limit=_SCAN_PAGE, offset=offset)
             places.extend(page)
             if offset is None:
                 break
         places.sort(
             key=lambda p: (
-                "hazard" in p.payload.note.lower(),
+                HAZARD_KEYWORD in p.payload.note.lower(),
                 p.confidence,
                 p.timestamp,
             ),
