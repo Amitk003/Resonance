@@ -19,6 +19,9 @@ Each point gets 0 to 1 from:
 3. Rare places
 4. Normal points if space allows
 
+A place counts as a hazard when its note contains the word hazard.
+The swap ranking in code uses the same rule, see HAZARD_KEYWORD.
+
 ## Conflicts
 
 Same place sent twice with different data:

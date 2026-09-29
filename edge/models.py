@@ -68,6 +68,12 @@ def validate_str_list(v: Any, name: str) -> list[str] | None:
     return list(v)
 
 
+# Keyword marking a hazard in a place note. The swap and the cloud sync
+# both rank hazard places first. Keep the match simple on purpose:
+# any note containing this word counts.
+HAZARD_KEYWORD: str = "hazard"
+
+
 class Place(BaseModel):
     """One remembered place.
 
