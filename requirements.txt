@@ -1,0 +1,9 @@
+qdrant-client==1.12.*
+pydantic>=2.0
+numpy
+pytest
+httpx
+fastapi==0.115.*
+uvicorn
+ruff
+mypy
