@@ -3,6 +3,8 @@ import { api, formatTime, getApiBase, setApiBase, type Place } from "./api";
 import DetailPanel from "./components/DetailPanel";
 import PoseMap from "./components/PoseMap";
 import SearchPanel from "./components/SearchPanel";
+import AddPlaceForm from "./components/AddPlaceForm";
+import { buildDemoPlaces } from "./demo";
 
 const AGENTS = ["robot-a", "robot-b"];
 const LIMIT_CHOICES = [10, 25, 50, 100, 200];
@@ -23,6 +25,8 @@ export default function App() {
   const [sort, setSort] = useState<SortKey>("time");
   const [limit, setLimit] = useState(50);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   const checkHealth = useCallback(async () => {
     try {
@@ -90,6 +94,24 @@ export default function App() {
 
   function handlePanelError(message: string) {
     setError(message);
+  }
+
+  async function seedDemo() {
+    setSeeding(true);
+    setError("");
+    try {
+      const fresh = await api.listPlaces(agent, 200);
+      const demo = buildDemoPlaces(agent, fresh.places);
+      for (const p of demo) {
+        await api.addPlace(p);
+      }
+      setNotice(demo.length + " demo places added to " + agent + ".");
+      loadList(agent, limit);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Seed failed");
+    } finally {
+      setSeeding(false);
+    }
   }
 
   const zones = useMemo(() => {
@@ -225,6 +247,19 @@ export default function App() {
           <h2>
             Memory list ({visible.length} of {total})
           </h2>
+          {showAdd && (
+            <div className="card" style={{ marginBottom: 10 }}>
+              <h2>Add a place</h2>
+              <AddPlaceForm
+                agent={agent}
+                places={places}
+                seedPlace={selected}
+                onAdded={handleChanged}
+                onError={handlePanelError}
+                onClose={() => setShowAdd(false)}
+              />
+            </div>
+          )}
           <div className="toolbar">
             <input
               className="grow"
@@ -267,6 +302,12 @@ export default function App() {
             </select>
             <button onClick={() => loadList(agent, limit)} disabled={loading}>
               {loading ? "Loading" : "Refresh"}
+            </button>
+            <button onClick={() => setShowAdd((v) => !v)}>
+              {showAdd ? "Close form" : "Add place"}
+            </button>
+            <button onClick={seedDemo} disabled={seeding || loading}>
+              {seeding ? "Seeding" : "Seed demo"}
             </button>
             {(query !== "" || zone !== "all") && (
               <button
