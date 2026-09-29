@@ -53,7 +53,9 @@ def find_matches(
         raise ValueError("min_score must be in [-1, 1]")
     matches: list[PlaceMatch] = []
     for cand in other:
-        scored = [(cosine_score(cand.vector, place.vector), place) for place in own_places]
+        scored = [
+            (cosine_score(cand.vector, place.vector), place) for place in own_places
+        ]
         scored.sort(key=lambda row: (-row[0], row[1].id))
         for score, place in scored[:top_k]:
             if score < min_score:

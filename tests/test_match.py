@@ -15,9 +15,7 @@ from tests.conftest import make_place, make_vector
 
 
 def candidate(agent: str = "robot-b", suffix: int = 7, seed: int = 2):
-    return place_to_swap_candidate(
-        make_place(agent=agent, suffix=suffix, seed=seed)
-    )
+    return place_to_swap_candidate(make_place(agent=agent, suffix=suffix, seed=seed))
 
 
 def test_cosine_identical():
