@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, formatTime, getApiBase, setApiBase, type Place } from "./api";
+import DetailPanel from "./components/DetailPanel";
+import PoseMap from "./components/PoseMap";
 
 const AGENTS = ["robot-a", "robot-b"];
 const LIMIT_CHOICES = [10, 25, 50, 100, 200];
@@ -72,6 +74,21 @@ export default function App() {
     setZone("all");
     setNotice("");
     setError("");
+  }
+
+  const selected = useMemo(
+    () => places.find((p) => p.id === selectedId) || null,
+    [places, selectedId],
+  );
+
+  function handleChanged(message: string) {
+    setNotice(message);
+    setError("");
+    loadList(agent, limit);
+  }
+
+  function handlePanelError(message: string) {
+    setError(message);
   }
 
   const zones = useMemo(() => {
@@ -315,12 +332,23 @@ export default function App() {
           )}
         </section>
 
-        <aside className="card side">
-          <h2>Details</h2>
-          <p style={{ color: "var(--muted)" }}>
-            Select a row to inspect a place. Map, search, add, and edit tools
-            land here next.
-          </p>
+        <aside className="side" style={{ display: "grid", gap: 12 }}>
+          <section className="card">
+            <h2>Pose map</h2>
+            <PoseMap
+              places={visible}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          </section>
+          <section className="card">
+            <h2>Details</h2>
+            <DetailPanel
+              place={selected}
+              onChanged={handleChanged}
+              onError={handlePanelError}
+            />
+          </section>
         </aside>
       </div>
     </div>
