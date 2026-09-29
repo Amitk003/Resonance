@@ -46,3 +46,12 @@ Every button calls the API or updates the view. No dead buttons.
 
 Vite plus React plus TypeScript. Plain CSS in `src/styles.css`.
 Typed client in `src/api.ts` matches `docs/api.md`.
+
+## Known limits
+
+- Memory list shows one page (max 200 rows). The API returns
+  `next_offset`, but paging controls are not built yet.
+- Agent switch covers robot-a and robot-b only. A backend
+  agent-list endpoint is needed before this can be dynamic.
+- Seed demo sends one POST per place. Fine for 18 demo rows.
+  Bulk import needs a backend bulk endpoint first.

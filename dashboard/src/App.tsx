@@ -6,6 +6,8 @@ import SearchPanel from "./components/SearchPanel";
 import AddPlaceForm from "./components/AddPlaceForm";
 import { buildDemoPlaces } from "./demo";
 
+// Fixed pair for the demo. A third robot needs a backend agent-list
+// endpoint first (no such contract yet), then this becomes dynamic.
 const AGENTS = ["robot-a", "robot-b"];
 const LIMIT_CHOICES = [10, 25, 50, 100, 200];
 

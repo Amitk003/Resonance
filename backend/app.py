@@ -71,7 +71,7 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
             store.close()
         app.state.stores.clear()
 
-    app = FastAPI(title="Resonance Edge API (Person 2 Task 2)", lifespan=lifespan)
+    app = FastAPI(title="Resonance Edge API", lifespan=lifespan)
     # Dashboard runs on :5173 and calls this API, so allow browser access.
     app.add_middleware(
         CORSMiddleware,
