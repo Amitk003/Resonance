@@ -24,25 +24,55 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from edge.config import agent_path
 from edge.models import Place, validate_vector
 from edge.store import PlaceStore
 
 
 class SearchRequest(BaseModel):
-    """Search one agent's local memory. agent_id selects the isolated DB."""
+    """Search one agent's local memory. agent_id selects the isolated DB.
+
+    Filters are optional and combine with AND. zones and sensors match
+    any value in the list. since and until bound the timestamp in unix
+    seconds, both ends included.
+    """
 
     agent_id: str = Field(min_length=1)
     vector: list[float]
     top_k: int = Field(default=5, ge=1, le=100)
     min_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    zones: list[str] | None = Field(default=None)
+    sensors: list[str] | None = Field(default=None)
+    since: int | None = Field(default=None, ge=0)
+    until: int | None = Field(default=None, ge=0)
 
     @field_validator("vector")
     @classmethod
     def _validate_vector(cls, v: Any) -> list[float]:
         return validate_vector(v)
+
+    @field_validator("zones", "sensors")
+    @classmethod
+    def _validate_labels(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError("must be a list of strings or omitted")
+        for item in v:
+            if not isinstance(item, str) or not item:
+                raise ValueError("must hold non-empty strings")
+        return v
+
+    @model_validator(mode="after")
+    def _validate_window(self) -> SearchRequest:
+        if (
+            self.since is not None
+            and self.until is not None
+            and self.since > self.until
+        ):
+            raise ValueError("since must not be after until")
+        return self
 
 
 class SearchHit(BaseModel):
@@ -116,6 +146,10 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
                 vector=req.vector,
                 top_k=req.top_k,
                 min_confidence=req.min_confidence,
+                zones=req.zones,
+                sensors=req.sensors,
+                since=req.since,
+                until=req.until,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

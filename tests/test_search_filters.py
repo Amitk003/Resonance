@@ -8,10 +8,12 @@ Run: pytest -v
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 
+from backend.app import create_app
 from edge.models import Place
 from edge.store import PlaceStore
-from tests.conftest import make_vector
+from tests.conftest import make_place_payload, make_vector
 
 
 def seed_store(tmp_path) -> PlaceStore:
@@ -68,9 +70,7 @@ def test_zone_filter_multi(tmp_path):
 def test_sensor_filter(tmp_path):
     store = seed_store(tmp_path)
     try:
-        hits = store.search(
-            query_of(store, "robot-a-2"), top_k=5, sensors=["lidar"]
-        )
+        hits = store.search(query_of(store, "robot-a-2"), top_k=5, sensors=["lidar"])
         assert [p.id for p, _ in hits] == ["robot-a-2", "robot-a-3"]
     finally:
         store.close()
@@ -79,9 +79,7 @@ def test_sensor_filter(tmp_path):
 def test_time_window(tmp_path):
     store = seed_store(tmp_path)
     try:
-        hits = store.search(
-            query_of(store, "robot-a-1"), top_k=5, since=150, until=250
-        )
+        hits = store.search(query_of(store, "robot-a-1"), top_k=5, since=150, until=250)
         assert [p.id for p, _ in hits] == ["robot-a-2"]
         hits = store.search(query_of(store, "robot-a-1"), top_k=5, since=250)
         assert [p.id for p, _ in hits] == ["robot-a-3"]
@@ -131,21 +129,15 @@ def test_none_and_empty_means_no_filter(tmp_path):
         # so compare ids only.
         assert [
             p.id
-            for p, _ in store.search(
-                query_of(store, "robot-a-1"), top_k=5, zones=None
-            )
+            for p, _ in store.search(query_of(store, "robot-a-1"), top_k=5, zones=None)
         ] == plain
         assert [
             p.id
-            for p, _ in store.search(
-                query_of(store, "robot-a-1"), top_k=5, zones=[]
-            )
+            for p, _ in store.search(query_of(store, "robot-a-1"), top_k=5, zones=[])
         ] == plain
         assert [
             p.id
-            for p, _ in store.search(
-                query_of(store, "robot-a-1"), top_k=5, sensors=[]
-            )
+            for p, _ in store.search(query_of(store, "robot-a-1"), top_k=5, sensors=[])
         ] == plain
     finally:
         store.close()
@@ -181,6 +173,66 @@ def test_indexes_idempotent_and_reopen(tmp_path):
         store.close()
     reopened = PlaceStore(agent_id="robot-a", storage_root=tmp_path)
     try:
-        assert len(reopened.search(query_of(reopened, "robot-a-1"), zones=["hall"])) == 2
+        assert (
+            len(reopened.search(query_of(reopened, "robot-a-1"), zones=["hall"])) == 2
+        )
     finally:
         reopened.close()
+
+
+@pytest.fixture
+def client(tmp_path):
+    app = create_app(storage_root=tmp_path)
+    with TestClient(app) as c:
+        yield c
+
+
+def seed_api(client, agent: str = "robot-a") -> None:
+    spots = [
+        ("hall", "cam", 100, 0.9, 1),
+        ("lab", "lidar", 200, 0.8, 2),
+        ("hall", "lidar", 300, 0.4, 3),
+    ]
+    for i, (zone, sensor, ts, conf, seed) in enumerate(spots, start=1):
+        payload = make_place_payload(agent=agent, suffix=i, seed=seed, confidence=conf)
+        payload["timestamp"] = ts
+        payload["payload"] = {"zone": zone, "sensor": sensor, "note": ""}
+        assert client.post("/memory/add", json=payload).status_code == 200
+
+
+def search_api(client, **kwargs):
+    body = {"agent_id": "robot-a", "vector": make_vector(1), "top_k": 5}
+    body.update(kwargs)
+    return client.post("/memory/search", json=body)
+
+
+def test_api_zone_filter(client):
+    seed_api(client)
+    r = search_api(client, zones=["hall"])
+    assert r.status_code == 200, r.text
+    assert [h["id"] for h in r.json()] == ["robot-a-1", "robot-a-3"]
+
+
+def test_api_sensor_and_time_filter(client):
+    seed_api(client)
+    r = search_api(client, sensors=["lidar"])
+    assert r.status_code == 200, r.text
+    assert sorted(h["id"] for h in r.json()) == ["robot-a-2", "robot-a-3"]
+    r = search_api(client, since=150, until=250)
+    assert r.status_code == 200, r.text
+    assert [h["id"] for h in r.json()] == ["robot-a-2"]
+
+
+def test_api_combined_with_confidence(client):
+    seed_api(client)
+    r = search_api(client, zones=["hall"], min_confidence=0.5)
+    assert r.status_code == 200, r.text
+    assert [h["id"] for h in r.json()] == ["robot-a-1"]
+
+
+def test_api_bad_range_rejected(client):
+    seed_api(client)
+    r = search_api(client, since=300, until=100)
+    assert r.status_code in (400, 422)
+    r = search_api(client, zones=[""])
+    assert r.status_code in (400, 422)
