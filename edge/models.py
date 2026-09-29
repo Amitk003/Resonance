@@ -1,14 +1,14 @@
-"""Shared Pydantic 2 models — the one data contract for all branches.
+"""Shared Pydantic 2 models - the one data contract for all branches.
 
 Matches docs/data-model.md Place record, plus explicit agent_id
-so per-agent isolation can be validated (Task 1 extension).
+so per-agent isolation can be validated.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 from edge.config import DIM
 
@@ -65,11 +65,3 @@ class Place(BaseModel):
             if not isinstance(item, (int, float)):
                 raise ValueError("vector values must be numeric")
         return [float(x) for x in v]
-
-    @model_validator(mode="after")
-    def _validate_id_convention(self) -> "Place":
-        # Project convention: <agent_id>-<local_counter>, e.g. robot-a-42.
-        # Enforce prefix so data from another agent can't leak into this store.
-        if not self.id.startswith(self.agent_id + "-"):
-            raise ValueError(f"id '{self.id}' must start with agent_id '{self.agent_id}-'")
-        return self

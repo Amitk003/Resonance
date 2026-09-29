@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# Vector dimension — must be identical for every agent.
+# Vector dimension - must be identical for every agent.
 DIM: int = 512
 
 # Qdrant collection holding places for one agent.
@@ -23,9 +23,6 @@ COLLECTION_NAME: str = "places"
 # Repo root = parent of this file's directory (Resonance/edge/ -> Resonance/).
 # Storage layout: <repo_root>/edge_data/<agent_id>/
 EDGE_DATA_ROOT: Path = Path(__file__).resolve().parents[1] / "edge_data"
-
-# Shared merge threshold value only (logic lives in Task 13, not here).
-DEFAULT_THRESHOLD: float = 0.8
 
 
 def agent_path(agent_id: str, root: Path | str | None = None) -> Path:
