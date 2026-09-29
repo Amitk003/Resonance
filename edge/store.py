@@ -1,4 +1,4 @@
-"""Persistent offline local memory (Task 1, storage-only).
+"""Persistent offline local memory (Task 1 storage + Task 2 search).
 
 Each robot gets an isolated Qdrant Local DB at:
     ./edge_data/<agent_id>/   collection: places
@@ -6,7 +6,7 @@ Each robot gets an isolated Qdrant Local DB at:
 Runs in Qdrant local mode with no server and no network.
 The Qdrant Edge binary comes later; this API stays the same.
 
-No search, matching, alignment, scoring, sync, or API here.
+No matching, alignment, scoring, sync, or API here.
 Those build on top of this store in later tasks.
 """
 
@@ -14,10 +14,18 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 from uuid import NAMESPACE_OID, UUID, uuid5
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    PointStruct,
+    Range,
+    VectorParams,
+)
 
 from edge.config import COLLECTION_NAME, DIM, agent_path
 from edge.models import Payload, Place, Pose
@@ -33,6 +41,39 @@ _POINT_ID_NAMESPACE: UUID = uuid5(NAMESPACE_OID, "resonance.place.v1")
 def _qdrant_point_id(place_id: str) -> str:
     """Map a Place id (e.g. 'robot-a-42') to a valid Qdrant point id."""
     return str(uuid5(_POINT_ID_NAMESPACE, place_id))
+
+
+def _place_from_record(
+    payload: dict[str, Any] | None,
+    vector: Any,
+    fallback_agent: str,
+) -> Place | None:
+    """Rebuild a Place from stored payload + vector, or None if corrupt."""
+    if not payload or "id" not in payload:
+        return None
+    pose = payload.get("pose")
+    if not isinstance(pose, dict):
+        return None
+    try:
+        return Place(
+            id=payload["id"],
+            agent_id=payload.get("agent_id", fallback_agent),
+            vector=list(vector) if vector is not None else [],
+            pose=Pose(
+                x=float(pose["x"]),
+                y=float(pose["y"]),
+                theta=float(pose["theta"]),
+            ),
+            timestamp=int(payload["timestamp"]),
+            confidence=float(payload["confidence"]),
+            payload=Payload(
+                zone=str(payload.get("zone", "")),
+                sensor=str(payload.get("sensor", "")),
+                note=str(payload.get("note", "")),
+            ),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def _place_payload(place: Place) -> dict:
@@ -124,32 +165,50 @@ class PlaceStore:
         )
         if not points:
             return None
-        payload = points[0].payload or {}
-        if "id" not in payload:
-            return None
-        pose = payload.get("pose")
-        if not isinstance(pose, dict):
-            return None
-        try:
-            return Place(
-                id=payload["id"],
-                agent_id=payload.get("agent_id", self.agent_id),
-                vector=list(points[0].vector) if points[0].vector is not None else [],
-                pose=Pose(
-                    x=float(pose["x"]),
-                    y=float(pose["y"]),
-                    theta=float(pose["theta"]),
-                ),
-                timestamp=int(payload["timestamp"]),
-                confidence=float(payload["confidence"]),
-                payload=Payload(
-                    zone=str(payload.get("zone", "")),
-                    sensor=str(payload.get("sensor", "")),
-                    note=str(payload.get("note", "")),
-                ),
+        return _place_from_record(
+            points[0].payload, points[0].vector, self.agent_id
+        )
+
+    def search(
+        self,
+        vector: list[float],
+        top_k: int = 5,
+        min_confidence: float = 0.0,
+    ) -> list[tuple[Place, float]]:
+        """Find nearest places by cosine similarity with confidence filter.
+
+        Returns list of (Place, score) ordered by score descending.
+        Corrupt records are skipped. Empty store returns [].
+        """
+        if not isinstance(vector, list) or len(vector) != DIM:
+            raise ValueError(f"vector must be a list of {DIM} floats")
+        if not isinstance(top_k, int) or top_k < 1:
+            raise ValueError("top_k must be a positive int")
+        if not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be in [0, 1]")
+        query_filter = None
+        if min_confidence > 0.0:
+            query_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="confidence", range=Range(gte=min_confidence)
+                    )
+                ]
             )
-        except (KeyError, TypeError, ValueError):
-            return None
+        hits = self._client.search(
+            collection_name=self.collection,
+            query_vector=[float(x) for x in vector],
+            query_filter=query_filter,
+            limit=top_k,
+            with_payload=True,
+            with_vectors=True,
+        )
+        results: list[tuple[Place, float]] = []
+        for hit in hits:
+            place = _place_from_record(hit.payload, hit.vector, self.agent_id)
+            if place is not None:
+                results.append((place, float(hit.score)))
+        return results
 
     def count(self) -> int:
         """Number of stored places."""
