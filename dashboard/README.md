@@ -1,7 +1,8 @@
-# Resonance Memory Dashboard (Person 4, Task 4)
+# Resonance Memory Dashboard (Person 4, Tasks 4 and 8)
 
-Memory view page for the local place memory of each edge robot.
-Reads and writes through the backend REST API. No direct DB calls.
+Memory view page and Search results page for the local place memory
+of each edge robot. Reads and writes through the backend REST API.
+No direct DB calls.
 
 ## Run
 
@@ -42,10 +43,29 @@ Open http://localhost:5173 in a browser.
 
 Every button calls the API or updates the view. No dead buttons.
 
+## What the Search results page does
+
+- Header tabs switch between Memory and Search. Both pages share
+  the backend address, online status, and agent switch.
+- Query builder with three sources: a stored place vector, a noisy
+  copy near a place, or a fresh random vector. Top K and min
+  confidence sliders.
+- Zone and sensor checkbox groups plus Since and Until date pickers,
+  all sent to POST /memory/search. Reset filters clears them.
+- Ranked results table with score bars, zone badges, sensor,
+  confidence, and time. Click a match to inspect it.
+- Result map plots match poses with clickable dots. Match details
+  panel supports the same working edit and delete as Memory.
+- Past searches are saved in the browser with source, filters,
+  counts, and top score. Entries re-run the exact query, delete
+  singly, or clear all.
+
 ## Tech
 
 Vite plus React plus TypeScript. Plain CSS in `src/styles.css`.
 Typed client in `src/api.ts` matches `docs/api.md`.
+Pages live in `src/pages/`, shared bits in `src/common.ts`.
+History helpers in `src/searchHistory.ts` with vitest cover.
 
 ## Known limits
 
