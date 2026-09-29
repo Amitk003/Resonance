@@ -1,32 +1,48 @@
-# React + TypeScript + Vite
+# Resonance Memory Dashboard (Person 4, Task 4)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Memory view page for the local place memory of each edge robot.
+Reads and writes through the backend REST API. No direct DB calls.
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Terminal 1, backend (repo root):
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+.\.venv\Scripts\python.exe -m uvicorn backend.app:app --port 8000
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Terminal 2, dashboard:
+
+```
+cd dashboard
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 in a browser.
+
+## What the page does
+
+- Header: backend address box with Connect, online status with Retry,
+  agent switch between robot-a and robot-b.
+- Stat cards: places in view, total stored, average confidence,
+  zone count, sensor count. All update live.
+- Memory list: text filter, zone filter, sort, page size, Refresh,
+  Clear filters. Click a row to select it.
+- Pose map: SVG plot of x and y with heading ticks. Click a dot
+  to select that place.
+- Details: full record with raw JSON, Edit (zone, sensor, note,
+  confidence) through PUT, Delete with confirm through DELETE.
+- Similar search: pick a source place, move Top K and min confidence
+  sliders, Find similar through POST /memory/search. Click a match
+  to jump to it.
+- Add place: form with input checks, vector is fresh random or near
+  the selected place. Seed demo adds 18 clustered places so similar
+  search shows clear high and low scores.
+
+Every button calls the API or updates the view. No dead buttons.
+
+## Tech
+
+Vite plus React plus TypeScript. Plain CSS in `src/styles.css`.
+Typed client in `src/api.ts` matches `docs/api.md`.

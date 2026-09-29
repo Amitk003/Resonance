@@ -23,10 +23,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 from edge.config import agent_path
-from edge.models import Place, validate_vector, validate_vector
+from edge.models import Place, validate_vector
 from edge.store import PlaceStore
 
 
@@ -71,6 +72,13 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         app.state.stores.clear()
 
     app = FastAPI(title="Resonance Edge API (Person 2 Task 2)", lifespan=lifespan)
+    # Dashboard runs on :5173 and calls this API, so allow browser access.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.state.storage_root = storage_root
     stores: dict[str, PlaceStore] = {}
     app.state.stores = stores
