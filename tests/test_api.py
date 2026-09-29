@@ -5,31 +5,11 @@ Run: pytest -v
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from edge.config import DIM
-
-
-def make_vector(seed: int = 0) -> list[float]:
-    rng = np.random.default_rng(seed)
-    return rng.random(DIM).tolist()
-
-
-def make_place_payload(
-    agent: str = "robot-a", suffix: int = 1, seed: int = 0, confidence: float = 0.9
-) -> dict:
-    return {
-        "id": f"{agent}-{suffix}",
-        "agent_id": agent,
-        "vector": make_vector(seed),
-        "pose": {"x": 1.5, "y": 2.0, "theta": 0.4},
-        "timestamp": 1727000000,
-        "confidence": confidence,
-        "payload": {"zone": "hall", "sensor": "cam", "note": ""},
-    }
+from tests.conftest import make_place_payload, make_vector
 
 
 @pytest.fixture
