@@ -106,6 +106,10 @@ export const api = {
     vector: number[];
     top_k: number;
     min_confidence: number;
+    zones?: string[];
+    sensors?: string[];
+    since?: number;
+    until?: number;
   }): Promise<SearchHit[]> {
     return request("/memory/search", { method: "POST", body: JSON.stringify(params) });
   },

@@ -29,7 +29,7 @@ from qdrant_client.models import (
 )
 
 from edge.config import COLLECTION_NAME, DIM, agent_path
-from edge.models import Payload, Place, Pose, validate_vector
+from edge.models import Payload, Place, Pose, validate_str_list, validate_vector
 
 logger = logging.getLogger(__name__)
 
@@ -92,17 +92,8 @@ def _place_payload(place: Place) -> dict:
 
 
 def _clean_str_list(values: list[str] | None, name: str) -> list[str]:
-    """Check a match-any filter list. None stays None, empties drop out."""
-    if values is None:
-        return []
-    if not isinstance(values, list):
-        raise ValueError(f"{name} must be a list of strings or None")
-    cleaned = []
-    for item in values:
-        if not isinstance(item, str) or not item:
-            raise ValueError(f"{name} must hold non-empty strings")
-        cleaned.append(item)
-    return cleaned
+    """Check a match-any filter list. None and empty mean no filter."""
+    return validate_str_list(values, name) or []
 
 
 # Task 5 filter fields. Payload indexes are created for these so filtered

@@ -233,6 +233,6 @@ def test_api_combined_with_confidence(client):
 def test_api_bad_range_rejected(client):
     seed_api(client)
     r = search_api(client, since=300, until=100)
-    assert r.status_code in (400, 422)
+    assert r.status_code == 422
     r = search_api(client, zones=[""])
-    assert r.status_code in (400, 422)
+    assert r.status_code == 422

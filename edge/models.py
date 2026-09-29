@@ -52,6 +52,22 @@ def validate_vector(v: Any, dim: int = DIM) -> list[float]:
     return [float(x) for x in v]
 
 
+def validate_str_list(v: Any, name: str) -> list[str] | None:
+    """Shared match-any filter check used by the API and the store.
+
+    None stays None (no filter). Otherwise returns the cleaned list.
+    Raises ValueError for anything else.
+    """
+    if v is None:
+        return None
+    if not isinstance(v, list):
+        raise ValueError(f"{name} must be a list of strings or omitted")
+    for item in v:
+        if not isinstance(item, str) or not item:
+            raise ValueError(f"{name} must hold non-empty strings")
+    return list(v)
+
+
 class Place(BaseModel):
     """One remembered place.
 
