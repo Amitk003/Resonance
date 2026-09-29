@@ -23,6 +23,105 @@ interface Props {
   onNotice: (message: string) => void;
 }
 
+function parseDateTime(raw: string): number | undefined | null {
+  const clean = raw.trim();
+  if (clean === "") return undefined;
+  const ms = new Date(clean).getTime();
+  if (Number.isNaN(ms) || ms < 0) return null;
+  return Math.floor(ms / 1000);
+}
+
+function buildQueryVector(
+  places: Place[],
+  q: SearchQuery,
+): { vector: number[]; label: string } | null {
+  if (q.source === "random") {
+    return { vector: randomVector(), label: "fresh random vector" };
+  }
+  const base = places.find((p) => p.id === q.sourceId);
+  if (!base) return null;
+  if (q.source === "near") {
+    return {
+      vector: noisyCopy(base.vector, 0.05, seededRandom(Date.now() % 100000)),
+      label: "near " + base.id,
+    };
+  }
+  return { vector: base.vector, label: "place " + base.id };
+}
+
+interface TimeWindow {
+  since?: number;
+  until?: number;
+  error?: string;
+}
+
+function parseWindow(q: SearchQuery): TimeWindow {
+  const since = parseDateTime(q.sinceInput);
+  const until = parseDateTime(q.untilInput);
+  if (since === null || until === null) {
+    return { error: "Since and Until must be valid dates, or left blank." };
+  }
+  if (since !== undefined && until !== undefined && since > until) {
+    return { error: "Since must not be after Until." };
+  }
+  return { since, until };
+}
+
+interface ExecParams {
+  vector: number[];
+  sourceLabel: string;
+  query: SearchQuery;
+  since?: number;
+  until?: number;
+}
+
+interface ExecDeps {
+  agent: string;
+  setBusy: (busy: boolean) => void;
+  applyResults: (hits: SearchHit[], ms: number) => void;
+  recordHistory: (record: SearchRecord) => void;
+  notify: (message: string) => void;
+  fail: (message: string) => void;
+}
+
+async function executeSearch(deps: ExecDeps, p: ExecParams): Promise<void> {
+  deps.setBusy(true);
+  const started = performance.now();
+  try {
+    const res = await api.search({
+      agent_id: deps.agent,
+      vector: p.vector,
+      top_k: p.query.topK,
+      min_confidence: p.query.minConf,
+      zones: p.query.zones,
+      sensors: p.query.sensors,
+      since: p.since,
+      until: p.until,
+    });
+    const ms = Math.round(performance.now() - started);
+    deps.applyResults(res, ms);
+    const filterLabel = describeQuery(deps.agent, p.query);
+    deps.recordHistory({
+      id: deps.agent + "-" + Date.now(),
+      time: Math.floor(Date.now() / 1000),
+      agent: deps.agent,
+      sourceLabel: p.sourceLabel,
+      filterLabel,
+      resultCount: res.length,
+      topScore: res.length > 0 ? res[0].score : null,
+      query: p.query,
+    });
+    deps.notify(
+      "Search done in " + ms + " ms, " + res.length + " matches (" +
+        p.sourceLabel + " | " + filterLabel + ").",
+    );
+  } catch (e) {
+    deps.fail(e instanceof Error ? e.message : "Search failed");
+  } finally {
+    deps.setBusy(false);
+  }
+}
+
 export default function SearchPage({ agent, reloadToken, onError, onNotice }: Props) {
   const [places, setPlaces] = useState<Place[]>([]);
   const [sourceMode, setSourceMode] = useState<SourceMode>("place");
@@ -79,65 +178,22 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
     set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
   }
 
-  function parseDateTime(raw: string): number | undefined | null {
-    const clean = raw.trim();
-    if (clean === "") return undefined;
-    const ms = new Date(clean).getTime();
-    if (Number.isNaN(ms) || ms < 0) return null;
-    return Math.floor(ms / 1000);
-  }
-
   const [history, setHistory] = useState<SearchRecord[]>(() => loadHistory());
 
-  interface ExecParams {
-    vector: number[];
-    sourceLabel: string;
-    query: SearchQuery;
-    since?: number;
-    until?: number;
-  }
-
-  async function executeSearch(p: ExecParams) {
-    setBusy(true);
-    const started = performance.now();
-    try {
-      const res = await api.search({
-        agent_id: agent,
-        vector: p.vector,
-        top_k: p.query.topK,
-        min_confidence: p.query.minConf,
-        zones: p.query.zones,
-        sensors: p.query.sensors,
-        since: p.since,
-        until: p.until,
-      });
-      const ms = Math.round(performance.now() - started);
-      setHits(res);
-      setSearched(true);
-      setSelectedId(null);
-      setQueryMs(ms);
-      const filterLabel = describeQuery(agent, p.query);
-      setHistory(
-        saveRecord({
-          id: agent + "-" + Date.now(),
-          time: Math.floor(Date.now() / 1000),
-          agent,
-          sourceLabel: p.sourceLabel,
-          filterLabel,
-          resultCount: res.length,
-          topScore: res.length > 0 ? res[0].score : null,
-          query: p.query,
-        }),
-      );
-      onNotice(
-        "Search done in " + ms + " ms, " + res.length + " matches (" +
-          p.sourceLabel + " | " + filterLabel + ").",
-      );
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Search failed");
-    } finally {
-      setBusy(false);
-    }
+  function deps(): ExecDeps {
+    return {
+      agent,
+      setBusy,
+      applyResults: (hits, ms) => {
+        setHits(hits);
+        setSearched(true);
+        setSelectedId(null);
+        setQueryMs(ms);
+      },
+      recordHistory: (record) => setHistory(saveRecord(record)),
+      notify: onNotice,
+      fail: onError,
+    };
   }
 
   function currentQuery(): SearchQuery {
@@ -153,45 +209,19 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
     };
   }
 
-  function parseWindow(q: SearchQuery): { since?: number; until?: number } | null {
-    const since = parseDateTime(q.sinceInput);
-    const until = parseDateTime(q.untilInput);
-    if (since === null || until === null) {
-      onError("Since and Until must be valid dates, or left blank.");
-      return null;
-    }
-    if (since !== undefined && until !== undefined && since > until) {
-      onError("Since must not be after Until.");
-      return null;
-    }
-    return { since, until };
-  }
-
-  function vectorFor(q: SearchQuery): { vector: number[]; label: string } | null {
-    if (q.source === "random") {
-      return { vector: randomVector(), label: "fresh random vector" };
-    }
-    const base = places.find((p) => p.id === q.sourceId);
-    if (!base) return null;
-    if (q.source === "near") {
-      return {
-        vector: noisyCopy(base.vector, 0.05, seededRandom(Date.now() % 100000)),
-        label: "near " + base.id,
-      };
-    }
-    return { vector: base.vector, label: "place " + base.id };
-  }
-
   async function runSearch() {
     const q = currentQuery();
-    const built = vectorFor(q);
+    const built = buildQueryVector(places, q);
     if (!built) {
       onError("Pick a source place first, or use a random vector.");
       return;
     }
     const window = parseWindow(q);
-    if (!window) return;
-    await executeSearch({
+    if (window.error) {
+      onError(window.error);
+      return;
+    }
+    await executeSearch(deps(), {
       vector: built.vector,
       sourceLabel: built.label,
       query: q,
@@ -210,14 +240,17 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
     setSensorSel(q.sensors);
     setSinceInput(q.sinceInput);
     setUntilInput(q.untilInput);
-    const built = vectorFor({ ...q, sourceId: q.sourceId });
+    const built = buildQueryVector(places, q);
     if (!built) {
       onError("Source place " + q.sourceId + " is not loaded. Pick another source.");
       return;
     }
     const window = parseWindow(q);
-    if (!window) return;
-    await executeSearch({
+    if (window.error) {
+      onError(window.error);
+      return;
+    }
+    await executeSearch(deps(), {
       vector: built.vector,
       sourceLabel: built.label,
       query: q,
