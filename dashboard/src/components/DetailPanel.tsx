@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, formatTime, type Place } from "../api";
 
 interface Props {
@@ -8,22 +8,16 @@ interface Props {
 }
 
 export default function DetailPanel({ place, onChanged, onError }: Props) {
+  // The parent passes key={place.id}, so a newly selected place remounts
+  // this panel and the form starts from the fresh record. No effect needed.
   const [editing, setEditing] = useState(false);
-  const [zone, setZone] = useState("");
-  const [sensor, setSensor] = useState("");
-  const [note, setNote] = useState("");
-  const [confidence, setConfidence] = useState("0.9");
+  const [zone, setZone] = useState(place?.payload.zone ?? "");
+  const [sensor, setSensor] = useState(place?.payload.sensor ?? "");
+  const [note, setNote] = useState(place?.payload.note ?? "");
+  const [confidence, setConfidence] = useState(
+    place ? String(place.confidence) : "0.9",
+  );
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setEditing(false);
-    if (place) {
-      setZone(place.payload.zone);
-      setSensor(place.payload.sensor);
-      setNote(place.payload.note);
-      setConfidence(String(place.confidence));
-    }
-  }, [place]);
 
   if (!place) {
     return <p style={{ color: "var(--muted)" }}>Select a row to see details.</p>;

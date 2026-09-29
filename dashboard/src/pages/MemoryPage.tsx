@@ -281,6 +281,7 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
           <section className="card">
             <h2>Details</h2>
             <DetailPanel
+              key={selected ? selected.id : "none"}
               place={selected}
               onChanged={handleChanged}
               onError={onError}
