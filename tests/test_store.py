@@ -41,9 +41,9 @@ def make_place(
 def test_collection_config(tmp_path):
     store = PlaceStore(agent_id="robot-a", storage_root=tmp_path)
     try:
-        info = store._client.get_collection(store.collection)
-        assert info.config.params.vectors.size == DIM
-        assert info.config.params.vectors.distance == Distance.COSINE
+        info = store.collection_info()
+        assert info["size"] == DIM
+        assert info["distance"] == Distance.COSINE
     finally:
         store.close()
 
@@ -75,9 +75,19 @@ def test_add_get_count(tmp_path):
 def test_count_three(tmp_path):
     store = PlaceStore(agent_id="robot-a", storage_root=tmp_path)
     try:
-        for i in (1, 2, 3):
-            store.add(make_place(suffix=i, seed=i))
+        ids = store.add_many([make_place(suffix=i, seed=i) for i in (1, 2, 3)])
+        assert ids == ["robot-a-1", "robot-a-2", "robot-a-3"]
         assert store.count() == 3
+        assert store.get("robot-a-2") is not None
+    finally:
+        store.close()
+
+
+def test_add_many_empty(tmp_path):
+    store = PlaceStore(agent_id="robot-a", storage_root=tmp_path)
+    try:
+        assert store.add_many([]) == []
+        assert store.count() == 0
     finally:
         store.close()
 
