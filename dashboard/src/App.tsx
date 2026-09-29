@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, formatTime, getApiBase, setApiBase, type Place } from "./api";
 import DetailPanel from "./components/DetailPanel";
 import PoseMap from "./components/PoseMap";
+import SearchPanel from "./components/SearchPanel";
 
 const AGENTS = ["robot-a", "robot-b"];
 const LIMIT_CHOICES = [10, 25, 50, 100, 200];
@@ -346,6 +347,15 @@ export default function App() {
             <DetailPanel
               place={selected}
               onChanged={handleChanged}
+              onError={handlePanelError}
+            />
+          </section>
+          <section className="card">
+            <h2>Similar search</h2>
+            <SearchPanel
+              places={visible}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
               onError={handlePanelError}
             />
           </section>
