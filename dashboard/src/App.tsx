@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, getApiBase, setApiBase } from "./api";
 import { AGENTS, PAGES, type PageKey } from "./common";
 import MemoryPage from "./pages/MemoryPage";
+import SearchPage from "./pages/SearchPage";
 
 export default function App() {
   const [page, setPage] = useState<PageKey>("memory");
@@ -126,13 +127,12 @@ export default function App() {
           onNotice={setNotice}
         />
       ) : (
-        <section className="card" style={{ marginTop: 12 }}>
-          <h2>Search results</h2>
-          <p style={{ color: "var(--muted)" }}>
-            The dedicated search results page lands here next. For now use
-            Similar search on the Memory page.
-          </p>
-        </section>
+        <SearchPage
+          agent={agent}
+          reloadToken={reloadToken}
+          onError={setError}
+          onNotice={setNotice}
+        />
       )}
     </div>
   );
