@@ -28,11 +28,32 @@ Rules:
 
 ```json
 {
-  "pair_id": "m1",
-  "query_id": "a1",
-  "match_id": "b7",
+  "pair_id": "robot-b-3~robot-a-7",
+  "query_id": "robot-b-3",
+  "match_id": "robot-a-7",
   "score": 0.87,
-  "inliers": 12
+  "inliers": 0
+}
+```
+
+- `query_id`: swapped candidate from the other robot
+- `match_id`: own place with the closest vector
+- `score`: cosine similarity from -1 to 1
+- `inliers`: 0 here, Task 10 fills it during the shape check
+- `pair_id`: stable key built as query plus match with a tilde
+
+## Swap candidate
+
+Slim meeting unit, no zone or sensor text, so radio messages stay small:
+
+```json
+{
+  "id": "robot-a-7",
+  "agent_id": "robot-a",
+  "vector": [0.12, -0.03],
+  "pose": {"x": 1.5, "y": 2.0, "theta": 0.4},
+  "confidence": 0.9,
+  "timestamp": 1727000000
 }
 ```
 
@@ -40,13 +61,28 @@ Rules:
 
 ```json
 {
-  "transform": {"dx": 0.5, "dy": -0.2, "dtheta": 0.05},
-  "confidence": 0.91,
-  "used_pairs": 12,
-  "threshold": 0.8
+  "dx": 0.5,
+  "dy": -0.2,
+  "dtheta": 0.05,
+  "inliers": 12,
+  "total": 15
 }
 ```
 
-- `transform` moves map B into map A
-- `confidence` blends vector score plus shape fit
-- Below threshold means no fuse, only log
+- Moves map B into map A
+- `inliers` over `total` is the shape fit from 0 to 1
+- Fuse gate lives in Task 13, not here
+
+## Conflict log
+
+```json
+{
+  "id": "robot-a-7",
+  "winner_id": "robot-a-7",
+  "loser_id": "robot-a-7",
+  "reason": "higher-confidence"
+}
+```
+
+- Reasons: same, higher-confidence, more-votes, newer, tie-keep-existing
+- The loser stays in per-id version history, capped at 10, so no data is lost
