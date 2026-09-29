@@ -7,7 +7,7 @@ One task per line. Each task has one owner.
 3. Update and delete API for place vectors - Person 3
 4. Memory view page in dashboard - Person 4
 5. Offline vector search with filters - Person 1
-6. Small vector swap on meeting - Person 2
+6. Small vector swap on meeting - Person 1
 7. Upload order by value for cloud sync - Person 3
 8. Search results page in dashboard - Person 4
 9. Nearest neighbor match between two agents - Person 1
