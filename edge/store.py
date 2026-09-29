@@ -3,45 +3,50 @@
 Each robot gets an isolated Qdrant Local DB at:
     ./edge_data/<agent_id>/   collection: places
 
+Runs in Qdrant local mode with no server and no network.
+The Qdrant Edge binary comes later; this API stays the same.
+
 No search, matching, alignment, scoring, sync, or API here.
 Those build on top of this store in later tasks.
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_OID, UUID, uuid5
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.exceptions import UnexpectedResponse
-from qdrant_client.models import (
-    Distance,
-    PayloadSchemaType,
-    PointStruct,
-    VectorParams,
-)
+from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from edge.config import COLLECTION_NAME, DIM, agent_path
 from edge.models import Payload, Place, Pose
 
-# Fields Task 5 filtering will need — indexes created now, logic later.
-_INDEX_FIELDS: dict[str, PayloadSchemaType] = {
-    "agent_id": PayloadSchemaType.KEYWORD,
-    "timestamp": PayloadSchemaType.INTEGER,
-    "confidence": PayloadSchemaType.FLOAT,
-    "zone": PayloadSchemaType.KEYWORD,
-    "sensor": PayloadSchemaType.KEYWORD,
-}
+logger = logging.getLogger(__name__)
+
+# Project-specific namespace for point ids. Qdrant only accepts ints or
+# UUIDs as point ids, so we derive one deterministic UUID per Place id.
+# The original Place id stays in the payload as the public identifier.
+_POINT_ID_NAMESPACE: UUID = uuid5(NAMESPACE_OID, "resonance.place.v1")
 
 
 def _qdrant_point_id(place_id: str) -> str:
-    """Map a Place id (e.g. 'robot-a-42') to a valid Qdrant point id.
+    """Map a Place id (e.g. 'robot-a-42') to a valid Qdrant point id."""
+    return str(uuid5(_POINT_ID_NAMESPACE, place_id))
 
-    Qdrant only accepts ints or UUIDs as point ids, so we derive a
-    deterministic UUID5. The original Place id is kept in the payload
-    and used as the public identifier.
-    """
-    return str(uuid5(NAMESPACE_URL, place_id))
+
+def _place_payload(place: Place) -> dict:
+    """Flatten a Place into the stored payload dict."""
+    return {
+        "id": place.id,
+        "agent_id": place.agent_id,
+        "pose": {"x": place.pose.x, "y": place.pose.y, "theta": place.pose.theta},
+        "timestamp": place.timestamp,
+        "confidence": place.confidence,
+        "zone": place.payload.zone,
+        "sensor": place.payload.sensor,
+        "note": place.payload.note,
+    }
 
 
 class PlaceStore:
@@ -54,7 +59,7 @@ class PlaceStore:
         self.storage_path: Path = agent_path(agent_id, root=storage_root)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.collection = COLLECTION_NAME
-        # Local persistent mode — no server, no network.
+        # Local persistent mode - no server, no network.
         self._client = QdrantClient(path=str(self.storage_path))
         self.create_collection()
 
@@ -66,51 +71,51 @@ class PlaceStore:
                 collection_name=self.collection,
                 vectors_config=VectorParams(size=DIM, distance=Distance.COSINE),
             )
-        self._ensure_indexes()
 
-    def _ensure_indexes(self) -> None:
-        for field, schema in _INDEX_FIELDS.items():
-            try:
-                self._client.create_payload_index(
-                    collection_name=self.collection,
-                    field_name=field,
-                    field_schema=schema,
-                )
-            except (UnexpectedResponse, ValueError, Exception):
-                # Index already exists — safe to ignore for idempotency.
-                continue
+    def collection_info(self) -> dict:
+        """Public read of collection shape: vector size, distance, points."""
+        info = self._client.get_collection(self.collection)
+        params = info.config.params.vectors
+        return {
+            "size": params.size,
+            "distance": params.distance,
+            "count": self.count(),
+        }
 
     # -- public API ----------------------------------------------------
     def add(self, place: Place) -> str:
         """Upsert one Place. Same id overwrites (no duplicates)."""
-        if place.agent_id != self.agent_id:
-            raise ValueError(
-                f"place agent_id '{place.agent_id}' does not match store '{self.agent_id}'"
-            )
-        payload = {
-            "id": place.id,
-            "agent_id": place.agent_id,
-            "pose": {"x": place.pose.x, "y": place.pose.y, "theta": place.pose.theta},
-            "timestamp": place.timestamp,
-            "confidence": place.confidence,
-            "zone": place.payload.zone,
-            "sensor": place.payload.sensor,
-            "note": place.payload.note,
-        }
-        self._client.upsert(
-            collection_name=self.collection,
-            points=[
+        return self.add_many([place])[0]
+
+    def add_many(self, places: list[Place]) -> list[str]:
+        """Upsert many Places in one call. Same id overwrites."""
+        points = []
+        ids = []
+        for place in places:
+            if place.agent_id != self.agent_id:
+                raise ValueError(
+                    f"place agent_id '{place.agent_id}' "
+                    f"does not match store '{self.agent_id}'"
+                )
+            points.append(
                 PointStruct(
                     id=_qdrant_point_id(place.id),
                     vector=place.vector,
-                    payload=payload,
+                    payload=_place_payload(place),
                 )
-            ],
-        )
-        return place.id
+            )
+            ids.append(place.id)
+        if points:
+            self._client.upsert(collection_name=self.collection, points=points)
+        return ids
 
     def get(self, place_id: str) -> Place | None:
-        """Retrieve one Place by id, or None if missing."""
+        """Retrieve one Place by id, or None if missing or corrupt.
+
+        Note: Qdrant COSINE stores L2-normalized vectors, so the returned
+        vector keeps the direction but not the magnitude. Compare with
+        cosine similarity, not raw values.
+        """
         points = self._client.retrieve(
             collection_name=self.collection,
             ids=[_qdrant_point_id(place_id)],
@@ -119,34 +124,39 @@ class PlaceStore:
         )
         if not points:
             return None
-        pt = points[0]
-        payload = pt.payload or {}
-        pose = payload.get("pose", {})
-        vector = list(pt.vector) if pt.vector is not None else []
-        return Place(
-            id=payload.get("id", place_id),
-            agent_id=payload.get("agent_id", self.agent_id),
-            vector=vector,
-            pose=Pose(
-                x=float(pose.get("x", 0.0)),
-                y=float(pose.get("y", 0.0)),
-                theta=float(pose.get("theta", 0.0)),
-            ),
-            timestamp=int(payload.get("timestamp", 0)),
-            confidence=float(payload.get("confidence", 0.0)),
-            payload=Payload(
-                zone=str(payload.get("zone", "")),
-                sensor=str(payload.get("sensor", "")),
-                note=str(payload.get("note", "")),
-            ),
-        )
+        payload = points[0].payload or {}
+        if "id" not in payload:
+            return None
+        pose = payload.get("pose")
+        if not isinstance(pose, dict):
+            return None
+        try:
+            return Place(
+                id=payload["id"],
+                agent_id=payload.get("agent_id", self.agent_id),
+                vector=list(points[0].vector) if points[0].vector is not None else [],
+                pose=Pose(
+                    x=float(pose["x"]),
+                    y=float(pose["y"]),
+                    theta=float(pose["theta"]),
+                ),
+                timestamp=int(payload["timestamp"]),
+                confidence=float(payload["confidence"]),
+                payload=Payload(
+                    zone=str(payload.get("zone", "")),
+                    sensor=str(payload.get("sensor", "")),
+                    note=str(payload.get("note", "")),
+                ),
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
 
     def count(self) -> int:
         """Number of stored places."""
         return self._client.count(collection_name=self.collection).count
 
     def clear(self) -> None:
-        """Remove all places. Keeps collection + indexes intact.
+        """Remove all places. Keeps the collection intact.
 
         Note: delete_collection + recreate does not reliably reset
         Qdrant 1.12 local mode, so we delete all points by id instead.
@@ -170,5 +180,5 @@ class PlaceStore:
         """Flush and release the local DB handle (needed for restart tests)."""
         try:
             self._client.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Qdrant client did not close cleanly: %s", exc)
