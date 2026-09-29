@@ -260,12 +260,10 @@ class PlaceStore:
                 raise ValueError(f"{name} must be a unix timestamp >= 0 or None")
         if since is not None and until is not None and since > until:
             raise ValueError("since must not be after until")
-        must: list[FieldCondition] = []
+        must: list[Any] = []
         if min_confidence > 0.0:
             must.append(
-                FieldCondition(
-                    key="confidence", range=Range(gte=min_confidence)
-                )
+                FieldCondition(key="confidence", range=Range(gte=min_confidence))
             )
         if zones:
             must.append(FieldCondition(key="zone", match=MatchAny(any=zones)))
