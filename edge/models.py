@@ -129,3 +129,24 @@ def place_to_swap_candidate(place: Place) -> SwapCandidate:
         confidence=place.confidence,
         timestamp=place.timestamp,
     )
+
+
+def make_pair_id(query_id: str, match_id: str) -> str:
+    """Stable key for one matched pair. Later tasks reuse it."""
+    return f"{query_id}~{match_id}"
+
+
+class PlaceMatch(BaseModel):
+    """One nearest neighbor pair between two agents (Task 9).
+
+    Matches docs/data-model.md Match result. query_id is the swapped
+    candidate from the other robot, match_id is the own place with
+    the closest vector, score is cosine similarity in [-1, 1].
+    inliers stays 0 here; Task 10 fills it during the shape check.
+    """
+
+    pair_id: str = Field(min_length=1)
+    query_id: str = Field(min_length=1)
+    match_id: str = Field(min_length=1)
+    score: float = Field(ge=-1.0, le=1.0)
+    inliers: int = Field(default=0, ge=0)
