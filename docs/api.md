@@ -13,10 +13,26 @@ POST /memory/add saves one place record. Body is the place record. Returns saved
 POST /memory/search finds near places. Body:
 
 ```json
-{"vector": [0.1], "top_k": 5, "min_confidence": 0.0}
+{"agent_id": "robot-a", "vector": [0.1], "top_k": 5, "min_confidence": 0.0}
 ```
 
-Returns a list of match results.
+Returns a list of match results with id, score, and place.
+
+## Read one place
+
+GET /memory/{id}?agent_id=robot-a returns the place or 404.
+
+## Update
+
+PUT /memory/{id} saves the full place record. Path id must match body id or the call fails with 422. Same id overwrites. Returns saved id.
+
+## Delete
+
+DELETE /memory/{id}?agent_id=robot-a removes one place. Returns deleted true or 404 when missing.
+
+## List
+
+GET /memory/list?agent_id=robot-a&limit=50 returns one page plus total count. The dashboard memory view uses this.
 
 ## Meeting
 

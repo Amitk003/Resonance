@@ -4,9 +4,13 @@ Thin FastAPI layer over Person 1 PlaceStore (Qdrant local mode).
 No matching, alignment, sync, or dashboard logic here.
 
 Endpoints (see docs/api.md):
-    GET  /health          -> {"status": "ok"}
-    POST /memory/add      -> body Place, returns {"id": place.id}
-    POST /memory/search   -> body SearchRequest, returns [SearchHit]
+    GET    /health          -> {"status": "ok"}
+    POST   /memory/add      -> body Place, returns {"id": place.id}
+    POST   /memory/search   -> body SearchRequest, returns [SearchHit]
+    GET    /memory/list     -> query agent_id + limit, returns page + total
+    GET    /memory/{id}     -> query agent_id, returns Place or 404
+    PUT    /memory/{id}     -> body Place, path id must match, returns {"id"}
+    DELETE /memory/{id}     -> query agent_id, returns {"deleted": true} or 404
 
 Run:
     uvicorn backend.app:app --port 8000
@@ -18,7 +22,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from edge.config import agent_path
@@ -46,6 +50,14 @@ class SearchHit(BaseModel):
     id: str
     score: float
     place: Place
+
+
+class PlaceList(BaseModel):
+    """One page of the dashboard memory view."""
+
+    places: list[Place]
+    next_offset: Any = None
+    total: int
 
 
 def create_app(storage_root: Path | str | None = None) -> FastAPI:
@@ -102,6 +114,48 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         return [
             SearchHit(id=place.id, score=score, place=place) for place, score in hits
         ]
+
+    @app.get("/memory/list", response_model=PlaceList)
+    def memory_list(
+        agent_id: str,
+        limit: int = Query(default=50, ge=1, le=200),
+    ) -> PlaceList:
+        store = get_store(agent_id)
+        try:
+            places, next_offset = store.list_places(limit=limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return PlaceList(
+            places=places, next_offset=next_offset, total=store.count()
+        )
+
+    @app.get("/memory/{place_id}", response_model=Place)
+    def memory_get(place_id: str, agent_id: str) -> Place:
+        store = get_store(agent_id)
+        saved = store.get(place_id)
+        if saved is None:
+            raise HTTPException(status_code=404, detail="place not found")
+        return saved
+
+    @app.put("/memory/{place_id}")
+    def memory_update(place_id: str, place: Place) -> dict[str, str]:
+        if place.id != place_id:
+            raise HTTPException(
+                status_code=422, detail="path id must match body id"
+            )
+        store = get_store(place.agent_id)
+        try:
+            store.add(place)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"id": place.id}
+
+    @app.delete("/memory/{place_id}")
+    def memory_delete(place_id: str, agent_id: str) -> dict[str, bool]:
+        store = get_store(agent_id)
+        if not store.delete(place_id):
+            raise HTTPException(status_code=404, detail="place not found")
+        return {"deleted": True}
 
     return app
 
