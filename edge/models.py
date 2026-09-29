@@ -36,6 +36,22 @@ class Payload(BaseModel):
         return v
 
 
+def validate_vector(v: Any, dim: int = DIM) -> list[float]:
+    """Shared vector check used by models, API, and store.
+
+    Accepts a list of exactly dim numbers, returns them as floats.
+    Raises ValueError for anything else.
+    """
+    if not isinstance(v, list):
+        raise ValueError("vector must be a list of floats")
+    if len(v) != dim:
+        raise ValueError(f"vector must have exactly {dim} values, got {len(v)}")
+    for item in v:
+        if not isinstance(item, (int, float)):
+            raise ValueError("vector values must be numeric")
+    return [float(x) for x in v]
+
+
 class Place(BaseModel):
     """One remembered place.
 
@@ -57,11 +73,37 @@ class Place(BaseModel):
     @field_validator("vector")
     @classmethod
     def _validate_vector(cls, v: Any) -> list[float]:
-        if not isinstance(v, list):
-            raise ValueError("vector must be a list of floats")
-        if len(v) != DIM:
-            raise ValueError(f"vector must have exactly {DIM} values, got {len(v)}")
-        for item in v:
-            if not isinstance(item, (int, float)):
-                raise ValueError("vector values must be numeric")
-        return [float(x) for x in v]
+        return validate_vector(v)
+
+
+class SwapCandidate(BaseModel):
+    """Slim swap unit for the Task 6 meeting exchange.
+
+    Carries only what a rendezvous needs: identity, vector, pose,
+    confidence, and time. No zone, sensor, or note text, so radio
+    messages stay small.
+    """
+
+    id: str = Field(min_length=1)
+    agent_id: str = Field(min_length=1)
+    vector: list[float]
+    pose: Pose
+    confidence: float = Field(ge=0.0, le=1.0)
+    timestamp: int = Field(ge=0)
+
+    @field_validator("vector")
+    @classmethod
+    def _validate_vector(cls, v: Any) -> list[float]:
+        return validate_vector(v)
+
+
+def place_to_swap_candidate(place: Place) -> SwapCandidate:
+    """Strip a Place down to the fields a meeting swap needs."""
+    return SwapCandidate(
+        id=place.id,
+        agent_id=place.agent_id,
+        vector=place.vector,
+        pose=place.pose,
+        confidence=place.confidence,
+        timestamp=place.timestamp,
+    )

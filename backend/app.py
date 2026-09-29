@@ -21,8 +21,8 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from edge.config import DIM
-from edge.models import Place
+from edge.config import agent_path
+from edge.models import Place, validate_vector, validate_vector
 from edge.store import PlaceStore
 
 
@@ -37,14 +37,7 @@ class SearchRequest(BaseModel):
     @field_validator("vector")
     @classmethod
     def _validate_vector(cls, v: Any) -> list[float]:
-        if not isinstance(v, list):
-            raise ValueError("vector must be a list of floats")
-        if len(v) != DIM:
-            raise ValueError(f"vector must have exactly {DIM} values")
-        for item in v:
-            if not isinstance(item, (int, float)):
-                raise ValueError("vector values must be numeric")
-        return [float(x) for x in v]
+        return validate_vector(v)
 
 
 class SearchHit(BaseModel):

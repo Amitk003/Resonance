@@ -28,7 +28,7 @@ from qdrant_client.models import (
 )
 
 from edge.config import COLLECTION_NAME, DIM, agent_path
-from edge.models import Payload, Place, Pose
+from edge.models import Payload, Place, Pose, validate_vector
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +88,12 @@ def _place_payload(place: Place) -> dict:
         "sensor": place.payload.sensor,
         "note": place.payload.note,
     }
+
+
+# Task 5 owns filtering. When it lands, create payload indexes for these
+# fields: confidence (float), timestamp (int), zone (keyword), sensor
+# (keyword). Until then filters below stay correct, just unindexed.
+SEARCH_INDEX_FIELDS: tuple[str, ...] = ("confidence", "timestamp", "zone", "sensor")
 
 
 class PlaceStore:
@@ -179,15 +185,16 @@ class PlaceStore:
 
         Returns list of (Place, score) ordered by score descending.
         Corrupt records are skipped. Empty store returns [].
+        Raises ValueError for bad vector, top_k, or min_confidence.
         """
-        if not isinstance(vector, list) or len(vector) != DIM:
-            raise ValueError(f"vector must be a list of {DIM} floats")
+        query = validate_vector(vector)
         if not isinstance(top_k, int) or top_k < 1:
             raise ValueError("top_k must be a positive int")
         if not 0.0 <= min_confidence <= 1.0:
             raise ValueError("min_confidence must be in [0, 1]")
         query_filter = None
         if min_confidence > 0.0:
+            # No payload index yet (Task 5 adds it); still correct.
             query_filter = Filter(
                 must=[
                     FieldCondition(
@@ -197,7 +204,7 @@ class PlaceStore:
             )
         hits = self._client.search(
             collection_name=self.collection,
-            query_vector=[float(x) for x in vector],
+            query_vector=query,
             query_filter=query_filter,
             limit=top_k,
             with_payload=True,
