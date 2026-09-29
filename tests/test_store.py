@@ -1,4 +1,4 @@
-"""Task 1 tests — storage-only, fully offline.
+"""Task 1 tests - storage-only, fully offline.
 
 No internet, no server, no Docker, no model downloads.
 Run: pytest -v
@@ -12,30 +12,9 @@ from pydantic import ValidationError
 from qdrant_client.models import Distance
 
 from edge.config import DIM
-from edge.models import Place
+from edge.models import Place, place_to_swap_candidate
 from edge.store import PlaceStore
-
-
-def make_vector(seed: int = 0) -> list[float]:
-    rng = np.random.default_rng(seed)
-    return rng.random(DIM).tolist()
-
-
-def make_place(
-    agent: str = "robot-a",
-    suffix: int = 1,
-    seed: int = 0,
-    confidence: float = 0.9,
-) -> Place:
-    return Place(
-        id=f"{agent}-{suffix}",
-        agent_id=agent,
-        vector=make_vector(seed),
-        pose={"x": 1.5, "y": 2.0, "theta": 0.4},
-        timestamp=1727000000,
-        confidence=confidence,
-        payload={"zone": "hall", "sensor": "cam", "note": ""},
-    )
+from tests.conftest import make_place, make_vector
 
 
 def test_collection_config(tmp_path):
@@ -107,7 +86,7 @@ def test_persistence(tmp_path):
     s1 = PlaceStore(agent_id="robot-a", storage_root=root)
     s1.add(make_place(suffix=7, seed=7))
     s1.close()
-    # Reopen same path — data must survive restart.
+    # Reopen same path - data must survive restart.
     s2 = PlaceStore(agent_id="robot-a", storage_root=root)
     try:
         saved = s2.get("robot-a-7")
@@ -202,3 +181,20 @@ def test_zero_vector_offline(tmp_path):
         assert store.get("robot-a-1") is not None
     finally:
         store.close()
+
+
+def test_search_rejects_non_numeric_vector(tmp_path):
+    store = PlaceStore(agent_id="robot-a", storage_root=tmp_path)
+    try:
+        with pytest.raises(ValueError):
+            store.search(vector=["a"] * DIM)
+    finally:
+        store.close()
+
+
+def test_place_to_swap_candidate_strips_payload():
+    candidate = place_to_swap_candidate(make_place())
+    assert candidate.id == "robot-a-1"
+    assert candidate.vector == pytest.approx(make_vector(0))
+    assert candidate.confidence == pytest.approx(0.9)
+    assert candidate.pose.x == pytest.approx(1.5)
