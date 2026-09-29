@@ -1,4 +1,4 @@
-"""Task 11 tests — conflict winner plus history, fully offline."""
+"""Task 11 tests - conflict winner plus history, fully offline."""
 
 from __future__ import annotations
 

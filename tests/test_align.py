@@ -1,4 +1,4 @@
-"""Task 10 tests — rigid transform only, fully offline, numpy only."""
+"""Task 10 tests - rigid transform only, fully offline, numpy only."""
 
 from __future__ import annotations
 
