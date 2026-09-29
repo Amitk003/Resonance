@@ -8,9 +8,14 @@ Task 14 owns the endpoint.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from edge.models import Place, PlaceMatch, SwapCandidate, make_pair_id
+
+if TYPE_CHECKING:
+    from edge.store import PlaceStore
 
 
 def cosine_score(a: list[float], b: list[float]) -> float:
@@ -62,3 +67,38 @@ def find_matches(
                 )
             )
     return matches
+
+
+def match_agents(
+    own: PlaceStore,
+    other: PlaceStore,
+    swap_limit: int = 20,
+    top_k: int = 1,
+    min_score: float = 0.0,
+) -> list[PlaceMatch]:
+    """Match the other agent's swap set against own memory.
+
+    Reads the full own store through pages and takes the other
+    store's pick_swap set, then runs find_matches. Query ids come
+    from the other agent, match ids from own. Same O(n) tradeoff
+    as pick_swap, recorded there; fine for edge stores.
+    """
+    if (
+        not isinstance(swap_limit, int)
+        or isinstance(swap_limit, bool)
+        or not 1 <= swap_limit <= 100
+    ):
+        raise ValueError("swap_limit must be an int in [1, 100]")
+    places: list[Place] = []
+    offset = None
+    while True:
+        page, offset = own.list_places(limit=256, offset=offset)
+        places.extend(page)
+        if offset is None:
+            break
+    return find_matches(
+        places,
+        other.pick_swap(limit=swap_limit),
+        top_k=top_k,
+        min_score=min_score,
+    )
