@@ -1,4 +1,4 @@
-"""Persistent offline local memory (Task 1 storage + Task 2 search).
+"""Persistent offline local memory (Task 1 storage + Task 2/5 search).
 
 Each robot gets an isolated Qdrant Local DB at:
     ./edge_data/<agent_id>/   collection: places
@@ -22,6 +22,7 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchAny,
     PointStruct,
     Range,
     VectorParams,
@@ -90,10 +91,32 @@ def _place_payload(place: Place) -> dict:
     }
 
 
-# Task 5 owns filtering. When it lands, create payload indexes for these
-# fields: confidence (float), timestamp (int), zone (keyword), sensor
-# (keyword). Until then filters below stay correct, just unindexed.
+def _clean_str_list(values: list[str] | None, name: str) -> list[str]:
+    """Check a match-any filter list. None stays None, empties drop out."""
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        raise ValueError(f"{name} must be a list of strings or None")
+    cleaned = []
+    for item in values:
+        if not isinstance(item, str) or not item:
+            raise ValueError(f"{name} must hold non-empty strings")
+        cleaned.append(item)
+    return cleaned
+
+
+# Task 5 filter fields. Payload indexes are created for these so filtered
+# search stays fast in local mode now and on Qdrant Server later.
 SEARCH_INDEX_FIELDS: tuple[str, ...] = ("confidence", "timestamp", "zone", "sensor")
+
+# Index type per filter field: numbers get range indexes, labels get
+# keyword indexes for exact match filters.
+_PAYLOAD_INDEXES: dict[str, str] = {
+    "confidence": "float",
+    "timestamp": "integer",
+    "zone": "keyword",
+    "sensor": "keyword",
+}
 
 
 class PlaceStore:
@@ -109,6 +132,7 @@ class PlaceStore:
         # Local persistent mode - no server, no network.
         self._client = QdrantClient(path=str(self.storage_path))
         self.create_collection()
+        self.ensure_payload_indexes()
 
     # -- setup ---------------------------------------------------------
     def create_collection(self) -> None:
@@ -128,6 +152,32 @@ class PlaceStore:
             "distance": params.distance,
             "count": self.count(),
         }
+
+    def ensure_payload_indexes(self) -> None:
+        """Create missing payload indexes for the Task 5 filter fields.
+
+        Safe to call on every open: fields that already have an index
+        are skipped. A per-field failure only logs a warning so old
+        local DB files keep working without indexes.
+        """
+        try:
+            schema = self._client.get_collection(self.collection).payload_schema or {}
+        except Exception as exc:
+            logger.warning("Could not read payload schema: %s", exc)
+            return
+        for field in SEARCH_INDEX_FIELDS:
+            if field in schema:
+                continue
+            try:
+                self._client.create_payload_index(
+                    collection_name=self.collection,
+                    field_name=field,
+                    field_schema=_PAYLOAD_INDEXES[field],
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Could not create payload index for '%s': %s", field, exc
+                )
 
     # -- public API ----------------------------------------------------
     def add(self, place: Place) -> str:
@@ -180,28 +230,53 @@ class PlaceStore:
         vector: list[float],
         top_k: int = 5,
         min_confidence: float = 0.0,
+        zones: list[str] | None = None,
+        sensors: list[str] | None = None,
+        since: int | None = None,
+        until: int | None = None,
     ) -> list[tuple[Place, float]]:
-        """Find nearest places by cosine similarity with confidence filter.
+        """Find nearest places by cosine similarity with optional filters.
+
+        Filters combine with AND: a place must pass every given filter.
+        zones and sensors match any value in the list. since and until
+        bound the timestamp (unix seconds, both ends included).
+        None or an empty list means no filter on that field.
 
         Returns list of (Place, score) ordered by score descending.
         Corrupt records are skipped. Empty store returns [].
-        Raises ValueError for bad vector, top_k, or min_confidence.
+        Raises ValueError for bad vector, top_k, or filter values.
         """
         query = validate_vector(vector)
         if not isinstance(top_k, int) or top_k < 1:
             raise ValueError("top_k must be a positive int")
         if not 0.0 <= min_confidence <= 1.0:
             raise ValueError("min_confidence must be in [0, 1]")
-        query_filter = None
+        zones = _clean_str_list(zones, "zones")
+        sensors = _clean_str_list(sensors, "sensors")
+        for name, bound in (("since", since), ("until", until)):
+            if bound is not None and (
+                not isinstance(bound, int) or isinstance(bound, bool) or bound < 0
+            ):
+                raise ValueError(f"{name} must be a unix timestamp >= 0 or None")
+        if since is not None and until is not None and since > until:
+            raise ValueError("since must not be after until")
+        must: list[Any] = []
         if min_confidence > 0.0:
-            # No payload index yet (Task 5 adds it); still correct.
-            query_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="confidence", range=Range(gte=min_confidence)
-                    )
-                ]
+            must.append(
+                FieldCondition(key="confidence", range=Range(gte=min_confidence))
             )
+        if zones:
+            must.append(FieldCondition(key="zone", match=MatchAny(any=zones)))
+        if sensors:
+            must.append(FieldCondition(key="sensor", match=MatchAny(any=sensors)))
+        if since is not None or until is not None:
+            time_range: dict[str, Any] = {}
+            if since is not None:
+                time_range["gte"] = since
+            if until is not None:
+                time_range["lte"] = until
+            must.append(FieldCondition(key="timestamp", range=Range(**time_range)))
+        query_filter = Filter(must=must) if must else None
         hits = self._client.search(
             collection_name=self.collection,
             query_vector=query,

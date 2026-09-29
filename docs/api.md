@@ -16,6 +16,11 @@ POST /memory/search finds near places. Body:
 {"agent_id": "robot-a", "vector": [0.1], "top_k": 5, "min_confidence": 0.0}
 ```
 
+Optional filters combine with AND: `zones` and `sensors` match any
+value in the list, `since` and `until` bound the timestamp in unix
+seconds, both ends included. Omit a filter or pass an empty list to
+skip it.
+
 Returns a list of match results with id, score, and place.
 
 ## Read one place
