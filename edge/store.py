@@ -29,7 +29,15 @@ from qdrant_client.models import (
 )
 
 from edge.config import COLLECTION_NAME, DIM, agent_path
-from edge.models import Payload, Place, Pose, validate_str_list, validate_vector
+from edge.models import (
+    Payload,
+    Place,
+    Pose,
+    SwapCandidate,
+    place_to_swap_candidate,
+    validate_str_list,
+    validate_vector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +333,35 @@ class PlaceStore:
             if place is not None:
                 places.append(place)
         return places, next_offset
+
+    def pick_swap(self, limit: int = 20) -> list[SwapCandidate]:
+        """Pick the small set to send on meeting (Task 6, no matching).
+
+        Recent plus high value first: hazard note, then confidence,
+        then timestamp. Returns slim SwapCandidate records only.
+        """
+        if (
+            not isinstance(limit, int)
+            or isinstance(limit, bool)
+            or not 1 <= limit <= 100
+        ):
+            raise ValueError("limit must be an int in [1, 100]")
+        places: list[Place] = []
+        offset = None
+        while True:
+            page, offset = self.list_places(limit=256, offset=offset)
+            places.extend(page)
+            if offset is None:
+                break
+        places.sort(
+            key=lambda p: (
+                "hazard" in p.payload.note.lower(),
+                p.confidence,
+                p.timestamp,
+            ),
+            reverse=True,
+        )
+        return [place_to_swap_candidate(p) for p in places[:limit]]
 
     def clear(self) -> None:
         """Remove all places. Keeps the collection intact.
