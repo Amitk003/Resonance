@@ -7,6 +7,7 @@
 
 | Date (UTC) | Author / Agent | Files | What changed + why |
 |---|---|---|---|
+| 2026-09-30 | Amit (Task 7) | `edge/sync.py`, `tests/test_sync_queue.py`, `docs/sync-policy.md` | Task 7: upload order ranking. value_score plus rank_places plus select_upload, hazard anchor confidence rarity weights, 8 offline tests. No endpoint, no push, those stay in Task 14 and 15. |
 | 2026-09-30 | Amit (Task 6 cleanup) | `edge/models.py`, `edge/store.py`, `tests/test_meet_swap.py`, `docs/sync-policy.md`, `docs/roadmap.md` | Task 6 review fixes: em dash out, shared HAZARD_KEYWORD plus hazard rule in docs, scan cost noted, tie-break test, conftest payload in API test, Task 6 owner corrected. |
 | 2026-09-29 | Nirmit (Person 1 Task 6) + Muse Spark (coding agent) | `edge/store.py`, `backend/app.py`, `tests/test_meet_swap.py` | Task 6: small swap on meeting. Added store pick_swap(limit 1-100, hazard then confidence then timestamp) reusing list_places plus place_to_swap_candidate, plus POST /meet/swap returning slim SwapCandidate list. 6 offline tests (empty, limit/order, bad limit, isolation, API 200, API 422). No matching/transform/sync. |
 | 2026-09-29 | Amit (Task 5 cleanup) | `edge/models.py`, `edge/store.py`, `backend/app.py`, `tests/test_search_filters.py`, `dashboard/src/api.ts`, `dashboard/src/components/SearchPanel.tsx`, `dashboard/README.md` | Task 5 review fixes: shared validate_str_list helper, pinned 422 codes in filter tests, dashboard search panel wired to zone sensor and time filters. |

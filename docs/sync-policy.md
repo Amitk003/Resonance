@@ -4,13 +4,15 @@ What stays on the robot and what goes to the cloud.
 
 ## Value score
 
-Each point gets 0 to 1 from:
+Each point gets 0 to 1, best first:
 
-- New or rare place: higher is better
-- Model confidence: higher is better
-- Helped a merge: keep it
-- Hazard or key finding: upload first
-- Old and low value: drop first
+- Hazard note: plus 0.4
+- Merge anchor: plus 0.3
+- Confidence: plus 0.2 times confidence
+- Rare zone: plus 0.1 times rarity (1 minus zone share)
+
+Ties break toward newer places. The exact math lives in
+`edge/sync.py` so code and docs cannot drift apart.
 
 ## Upload order
 
