@@ -221,6 +221,45 @@ class PlaceStore:
         """Number of stored places."""
         return self._client.count(collection_name=self.collection).count
 
+    def delete(self, place_id: str) -> bool:
+        """Delete one Place by id. Returns True if it existed."""
+        points = self._client.retrieve(
+            collection_name=self.collection,
+            ids=[_qdrant_point_id(place_id)],
+            with_payload=False,
+            with_vectors=False,
+        )
+        if not points:
+            return False
+        self._client.delete(
+            collection_name=self.collection,
+            points_selector=[_qdrant_point_id(place_id)],
+        )
+        return True
+
+    def list_places(
+        self, limit: int = 50, offset: Any = None
+    ) -> tuple[list[Place], Any]:
+        """List places in pages. Returns (places, next offset or None).
+
+        Corrupt records are skipped. Used by the dashboard memory view.
+        """
+        if not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive int")
+        points, next_offset = self._client.scroll(
+            collection_name=self.collection,
+            limit=limit,
+            offset=offset,
+            with_payload=True,
+            with_vectors=True,
+        )
+        places = []
+        for pt in points:
+            place = _place_from_record(pt.payload, pt.vector, self.agent_id)
+            if place is not None:
+                places.append(place)
+        return places, next_offset
+
     def clear(self) -> None:
         """Remove all places. Keeps the collection intact.
 
