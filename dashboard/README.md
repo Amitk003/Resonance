@@ -34,8 +34,8 @@ Open http://localhost:5173 in a browser.
 - Details: full record with raw JSON, Edit (zone, sensor, note,
   confidence) through PUT, Delete with confirm through DELETE.
 - Similar search: pick a source place, move Top K and min confidence
-  sliders, Find similar through POST /memory/search. Click a match
-  to jump to it.
+  sliders, add zone, sensor, and time filters, Find similar through
+  POST /memory/search. Click a match to jump to it.
 - Add place: form with input checks, vector is fresh random or near
   the selected place. Seed demo adds 18 clustered places so similar
   search shows clear high and low scores.

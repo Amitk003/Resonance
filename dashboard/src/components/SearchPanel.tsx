@@ -12,6 +12,10 @@ export default function SearchPanel({ places, selectedId, onSelect, onError }: P
   const [sourceId, setSourceId] = useState<string>("");
   const [topK, setTopK] = useState(5);
   const [minConf, setMinConf] = useState(0);
+  const [zones, setZones] = useState("");
+  const [sensors, setSensors] = useState("");
+  const [since, setSince] = useState("");
+  const [until, setUntil] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -24,10 +28,31 @@ export default function SearchPanel({ places, selectedId, onSelect, onError }: P
     }
   }, [selectedId, places, sourceId]);
 
+  function splitList(raw: string): string[] {
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+
+  function parseTime(raw: string): number | undefined | null {
+    const clean = raw.trim();
+    if (clean === "") return undefined;
+    const n = Number(clean);
+    if (!Number.isInteger(n) || n < 0) return null;
+    return n;
+  }
+
   async function runSearch() {
     const source = places.find((p) => p.id === sourceId);
     if (!source) {
       onError("Pick a source place first.");
+      return;
+    }
+    const sinceN = parseTime(since);
+    const untilN = parseTime(until);
+    if (sinceN === null || untilN === null) {
+      onError("Since and Until must be unix timestamps of 0 or more.");
       return;
     }
     setBusy(true);
@@ -37,6 +62,10 @@ export default function SearchPanel({ places, selectedId, onSelect, onError }: P
         vector: source.vector,
         top_k: topK,
         min_confidence: minConf,
+        zones: splitList(zones),
+        sensors: splitList(sensors),
+        since: sinceN,
+        until: untilN,
       });
       setHits(res);
       setSearched(true);
@@ -87,6 +116,52 @@ export default function SearchPanel({ places, selectedId, onSelect, onError }: P
           onChange={(e) => setMinConf(Number(e.target.value))}
           aria-label="Minimum confidence"
         />
+      </div>
+      <label style={{ fontSize: 12, color: "var(--muted)" }}>
+        Zones (comma separated, blank means all)
+        <input
+          type="text"
+          value={zones}
+          onChange={(e) => setZones(e.target.value)}
+          placeholder="hall, lab"
+          style={{ width: "100%", marginTop: 4 }}
+          aria-label="Zone filter"
+        />
+      </label>
+      <label style={{ fontSize: 12, color: "var(--muted)" }}>
+        Sensors (comma separated, blank means all)
+        <input
+          type="text"
+          value={sensors}
+          onChange={(e) => setSensors(e.target.value)}
+          placeholder="cam, lidar"
+          style={{ width: "100%", marginTop: 4 }}
+          aria-label="Sensor filter"
+        />
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <label style={{ fontSize: 12, color: "var(--muted)", flex: 1 }}>
+          Since (unix time)
+          <input
+            type="text"
+            value={since}
+            onChange={(e) => setSince(e.target.value)}
+            placeholder="blank for none"
+            style={{ width: "100%", marginTop: 4 }}
+            aria-label="Since timestamp"
+          />
+        </label>
+        <label style={{ fontSize: 12, color: "var(--muted)", flex: 1 }}>
+          Until (unix time)
+          <input
+            type="text"
+            value={until}
+            onChange={(e) => setUntil(e.target.value)}
+            placeholder="blank for none"
+            style={{ width: "100%", marginTop: 4 }}
+            aria-label="Until timestamp"
+          />
+        </label>
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
