@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { api, type Place, type SearchHit } from "../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, formatTime, type Place, type SearchHit } from "../api";
 import DetailPanel from "../components/DetailPanel";
 import { noisyCopy, randomVector, seededRandom } from "../demo";
 
@@ -18,6 +18,10 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
   const [sourceId, setSourceId] = useState("");
   const [topK, setTopK] = useState(5);
   const [minConf, setMinConf] = useState(0);
+  const [zoneSel, setZoneSel] = useState<string[]>([]);
+  const [sensorSel, setSensorSel] = useState<string[]>([]);
+  const [sinceInput, setSinceInput] = useState("");
+  const [untilInput, setUntilInput] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,8 +48,33 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
     setHits([]);
     setSearched(false);
     setSelectedId(null);
+    setZoneSel([]);
+    setSensorSel([]);
+    setSinceInput("");
+    setUntilInput("");
     loadPlaces();
   }, [agent, reloadToken, loadPlaces]);
+
+  const allZones = useMemo(
+    () => Array.from(new Set(places.map((p) => p.payload.zone || "(none)"))).sort(),
+    [places],
+  );
+  const allSensors = useMemo(
+    () => Array.from(new Set(places.map((p) => p.payload.sensor || "(none)"))).sort(),
+    [places],
+  );
+
+  function toggle(list: string[], value: string, set: (v: string[]) => void) {
+    set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
+  }
+
+  function parseDateTime(raw: string): number | undefined | null {
+    const clean = raw.trim();
+    if (clean === "") return undefined;
+    const ms = new Date(clean).getTime();
+    if (Number.isNaN(ms) || ms < 0) return null;
+    return Math.floor(ms / 1000);
+  }
 
   function buildVector(): { vector: number[]; label: string } | null {
     if (sourceMode === "random") {
@@ -68,6 +97,16 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
       onError("Pick a source place first, or use a random vector.");
       return;
     }
+    const since = parseDateTime(sinceInput);
+    const until = parseDateTime(untilInput);
+    if (since === null || until === null) {
+      onError("Since and Until must be valid dates, or left blank.");
+      return;
+    }
+    if (since !== undefined && until !== undefined && since > until) {
+      onError("Since must not be after Until.");
+      return;
+    }
     setBusy(true);
     const started = performance.now();
     try {
@@ -76,15 +115,21 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
         vector: built.vector,
         top_k: topK,
         min_confidence: minConf,
+        zones: zoneSel,
+        sensors: sensorSel,
+        since,
+        until,
       });
       setHits(res);
       setSearched(true);
       setSelectedId(null);
-      setQueryMs(Math.round(performance.now() - started));
-      onNotice(
-        "Search done in " + Math.round(performance.now() - started) + " ms, " +
-          res.length + " matches for " + built.label + ".",
-      );
+      const ms = Math.round(performance.now() - started);
+      setQueryMs(ms);
+      const parts = [built.label, "top " + topK];
+      if (zoneSel.length > 0) parts.push("zones " + zoneSel.join(", "));
+      if (sensorSel.length > 0) parts.push("sensors " + sensorSel.join(", "));
+      if (minConf > 0) parts.push("confidence over " + minConf.toFixed(2));
+      onNotice("Search done in " + ms + " ms, " + res.length + " matches (" + parts.join(" | ") + ").");
     } catch (e) {
       onError(e instanceof Error ? e.message : "Search failed");
     } finally {
@@ -181,6 +226,80 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
             {busy ? "Searching" : "Run search"}
           </button>
           {searched && <button onClick={clearAll}>Clear</button>}
+          {(zoneSel.length > 0 ||
+            sensorSel.length > 0 ||
+            sinceInput !== "" ||
+            untilInput !== "") && (
+            <button
+              onClick={() => {
+                setZoneSel([]);
+                setSensorSel([]);
+                setSinceInput("");
+                setUntilInput("");
+              }}
+            >
+              Reset filters
+            </button>
+          )}
+        </div>
+
+        <h3 style={{ fontSize: 13, margin: "14px 0 6px" }}>Zones</h3>
+        {allZones.length === 0 ? (
+          <p style={{ color: "var(--muted)" }}>No places loaded yet.</p>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {allZones.map((z) => (
+              <label key={z} style={{ fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={zoneSel.includes(z)}
+                  onChange={() => toggle(zoneSel, z, setZoneSel)}
+                />{" "}
+                {z}
+              </label>
+            ))}
+          </div>
+        )}
+
+        <h3 style={{ fontSize: 13, margin: "14px 0 6px" }}>Sensors</h3>
+        {allSensors.length === 0 ? (
+          <p style={{ color: "var(--muted)" }}>No places loaded yet.</p>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {allSensors.map((s) => (
+              <label key={s} style={{ fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={sensorSel.includes(s)}
+                  onChange={() => toggle(sensorSel, s, setSensorSel)}
+                />{" "}
+                {s}
+              </label>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <label style={{ fontSize: 12, color: "var(--muted)", flex: 1 }}>
+            Since
+            <input
+              type="datetime-local"
+              value={sinceInput}
+              onChange={(e) => setSinceInput(e.target.value)}
+              style={{ width: "100%", marginTop: 4 }}
+              aria-label="Since date"
+            />
+          </label>
+          <label style={{ fontSize: 12, color: "var(--muted)", flex: 1 }}>
+            Until
+            <input
+              type="datetime-local"
+              value={untilInput}
+              onChange={(e) => setUntilInput(e.target.value)}
+              style={{ width: "100%", marginTop: 4 }}
+              aria-label="Until date"
+            />
+          </label>
         </div>
 
         {searched && (
@@ -197,6 +316,10 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
                     <th>#</th>
                     <th>Match</th>
                     <th>Score</th>
+                    <th>Zone</th>
+                    <th>Sensor</th>
+                    <th>Conf</th>
+                    <th>Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -209,7 +332,21 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
                     >
                       <td>{i + 1}</td>
                       <td>{h.id}</td>
-                      <td className="score">{h.score.toFixed(3)}</td>
+                      <td>
+                        <span className="conf-bar">
+                          <span
+                            className="conf-fill"
+                            style={{ width: Math.round(h.score * 100) + "%" }}
+                          />
+                        </span>
+                        <span className="score">{h.score.toFixed(3)}</span>
+                      </td>
+                      <td>
+                        <span className="badge">{h.place.payload.zone || "-"}</span>
+                      </td>
+                      <td>{h.place.payload.sensor || "-"}</td>
+                      <td>{h.place.confidence.toFixed(2)}</td>
+                      <td>{formatTime(h.place.timestamp)}</td>
                     </tr>
                   ))}
                 </tbody>
