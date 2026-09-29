@@ -9,6 +9,7 @@ store reader, fully offline and unit tested.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from edge.models import HAZARD_KEYWORD, Place
@@ -99,3 +100,67 @@ def select_upload(
         if offset is None:
             break
     return rank_places(places, anchors=anchors)[:limit]
+
+
+# -- Task 11: conflicts + version history -------------------------------
+
+HISTORY_LIMIT: int = 10
+
+
+@dataclass
+class ConflictLog:
+    """One conflict decision for the dashboard log (Task 14 exposes it)."""
+
+    id: str
+    winner_id: str
+    loser_id: str
+    reason: str
+
+
+def _same_place(a: Place, b: Place) -> bool:
+    return (
+        a.confidence == b.confidence
+        and a.timestamp == b.timestamp
+        and a.pose == b.pose
+        and a.payload == b.payload
+        and list(a.vector) == list(b.vector)
+    )
+
+
+def resolve_conflict(
+    existing: Place,
+    incoming: Place,
+    votes_existing: int = 1,
+    votes_incoming: int = 1,
+    history: dict[str, list[Place]] | None = None,
+) -> tuple[Place, ConflictLog]:
+    """Pick a winner for one id, keep the loser in history, never drop data.
+
+    Rules (docs/sync-policy.md): higher confidence wins, tie goes to
+    more agent votes, then newer timestamp, then keep existing.
+    Identical resends return existing with reason "same" and no history.
+    """
+    if existing.id != incoming.id:
+        raise ValueError("conflict must share one place id")
+    for name, votes in (("votes_existing", votes_existing), ("votes_incoming", votes_incoming)):
+        if not isinstance(votes, int) or isinstance(votes, bool) or votes < 1:
+            raise ValueError(f"{name} must be an int >= 1")
+    if _same_place(existing, incoming):
+        return existing, ConflictLog(existing.id, existing.id, incoming.id, "same")
+    if incoming.confidence != existing.confidence:
+        winner = incoming if incoming.confidence > existing.confidence else existing
+        reason = "higher-confidence"
+    elif votes_incoming != votes_existing:
+        winner = incoming if votes_incoming > votes_existing else existing
+        reason = "more-votes"
+    elif incoming.timestamp != existing.timestamp:
+        winner = incoming if incoming.timestamp > existing.timestamp else existing
+        reason = "newer"
+    else:
+        winner, reason = existing, "tie-keep-existing"
+    loser = incoming if winner is existing else existing
+    if history is not None:
+        versions = history.setdefault(existing.id, [])
+        versions.append(loser)
+        del versions[: max(0, len(versions) - HISTORY_LIMIT)]
+    return winner, ConflictLog(existing.id, winner.id, loser.id, reason)
