@@ -1,4 +1,4 @@
-"""Task 6 tests — small swap only, fully offline."""
+"""Task 6 tests - small swap only, fully offline."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from backend.app import create_app
 from edge.config import DIM
 from edge.store import PlaceStore
-from tests.conftest import make_place
+from tests.conftest import make_place, make_place_payload
 
 
 def test_pick_swap_empty(tmp_path):
@@ -34,6 +34,21 @@ def test_pick_swap_limit_and_order(tmp_path):
         assert got[0].id == "robot-a-100"
         assert all(len(c.vector) == DIM for c in got)
         assert all(c.agent_id == "robot-a" for c in got)
+    finally:
+        store.close()
+
+
+def test_pick_swap_order_beats_time(tmp_path):
+    """Higher confidence wins over newer timestamp, no hazard involved."""
+    store = PlaceStore(agent_id="robot-a", storage_root=tmp_path)
+    try:
+        old = make_place(suffix=1, seed=1, confidence=0.95)
+        old.timestamp = 100
+        new = make_place(suffix=2, seed=2, confidence=0.5)
+        new.timestamp = 900
+        store.add_many([old, new])
+        got = store.pick_swap(limit=2)
+        assert [c.id for c in got] == ["robot-a-1", "robot-a-2"]
     finally:
         store.close()
 
@@ -65,13 +80,10 @@ def test_meet_swap_api(tmp_path):
     app = create_app(storage_root=tmp_path)
     client = TestClient(app)
     for i in (1, 2, 3):
-        client.post("/memory/add", json={
-            "id": f"robot-a-{i}", "agent_id": "robot-a",
-            "vector": make_place(suffix=i, seed=i).vector,
-            "pose": {"x": 1.0, "y": 2.0, "theta": 0.1},
-            "timestamp": 1727000000 + i, "confidence": 0.5 + i * 0.1,
-            "payload": {"zone": "hall", "sensor": "cam", "note": ""},
-        }).raise_for_status()
+        payload = make_place_payload(suffix=i, seed=i)
+        payload["timestamp"] = 1727000000 + i
+        payload["confidence"] = 0.5 + i * 0.1
+        client.post("/memory/add", json=payload).raise_for_status()
     r = client.post("/meet/swap", json={"agent_id": "robot-a", "limit": 2})
     assert r.status_code == 200
     body = r.json()
