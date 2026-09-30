@@ -6,9 +6,10 @@
 // endpoint first (no such contract yet), then this becomes dynamic.
 export const AGENTS = ["robot-a", "robot-b"];
 
-export type PageKey = "memory" | "search";
+export type PageKey = "memory" | "search" | "merges";
 
 export const PAGES: { key: PageKey; label: string }[] = [
   { key: "memory", label: "Memory" },
   { key: "search", label: "Search results" },
+  { key: "merges", label: "Merge history" },
 ];

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, getApiBase, setApiBase } from "./api";
 import { AGENTS, PAGES, type PageKey } from "./common";
 import MemoryPage from "./pages/MemoryPage";
+import MergesPage from "./pages/MergesPage";
 import SearchPage from "./pages/SearchPage";
 
 export default function App() {
@@ -126,9 +127,15 @@ export default function App() {
           onError={setError}
           onNotice={setNotice}
         />
-      ) : (
+      ) : page === "search" ? (
         <SearchPage
           agent={agent}
+          reloadToken={reloadToken}
+          onError={setError}
+          onNotice={setNotice}
+        />
+      ) : (
+        <MergesPage
           reloadToken={reloadToken}
           onError={setError}
           onNotice={setNotice}
