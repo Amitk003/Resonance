@@ -67,6 +67,18 @@ of that agent, so aligned places rise on their own.
 
 Push to the server stays in a later task.
 
+## Push to cloud
+
+POST /sync/push sends the ranked queue to the shared server. Body:
+
+```json
+{"agent_id": "robot-a", "limit": 20}
+```
+
+Optional `server_url` overrides the QDRANT_URL env value, default
+http://localhost:6333. Returns uploaded and unchanged counts plus
+every conflict decision. Unreachable server answers 503.
+
 ## Sync
 
 GET /sync/queue lists items ranked by value.
