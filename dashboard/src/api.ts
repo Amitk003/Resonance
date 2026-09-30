@@ -164,6 +164,25 @@ export const api = {
     const q = new URLSearchParams({ limit: String(limit) });
     return request("/merges?" + q.toString());
   },
+  syncQueue(agent_id: string, limit = 20): Promise<SyncItem[]> {
+    const q = new URLSearchParams({ agent_id, limit: String(limit) });
+    return request("/sync/queue?" + q.toString());
+  },
+  pushSync(agent_id: string, limit = 20): Promise<SyncPushResponse> {
+    return request("/sync/push", {
+      method: "POST",
+      body: JSON.stringify({ agent_id, limit }),
+    });
+  },
+  getThreshold(): Promise<{ threshold: number }> {
+    return request("/fuse/threshold");
+  },
+  setThreshold(threshold: number): Promise<{ threshold: number }> {
+    return request("/fuse/threshold", {
+      method: "PUT",
+      body: JSON.stringify({ threshold }),
+    });
+  },
 };
 
 export function formatTime(timestamp: number): string {
@@ -172,4 +191,27 @@ export function formatTime(timestamp: number): string {
   } catch {
     return String(timestamp);
   }
+}
+
+export interface SyncItem {
+  place: Place;
+  score: number;
+  reasons: string[];
+}
+
+export interface ConflictEntry {
+  id: string;
+  winner_id: string;
+  loser_id: string;
+  reason: string;
+}
+
+export interface SyncPushResponse {
+  uploaded: number;
+  unchanged: number;
+  conflicts: ConflictEntry[];
+}
+
+export function decideFuse(score: number, threshold: number): boolean {
+  return score >= threshold;
 }
