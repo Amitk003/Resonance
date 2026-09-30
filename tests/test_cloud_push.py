@@ -67,6 +67,7 @@ def test_loser_stays_on_server(tmp_path):
     cloud.push_many([high])
     report = cloud.push_many([low])
     assert [log.reason for log in report.conflicts] == ["higher-confidence"]
+    assert (report.uploaded, report.kept, report.unchanged) == (0, 1, 0)
     saved = cloud._read_server("robot-a-1")
     assert saved is not None
     assert saved.confidence == pytest.approx(0.9)

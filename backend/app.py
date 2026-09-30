@@ -5,9 +5,10 @@ No matching, alignment, sync, or dashboard logic here.
 
 Endpoints (see docs/api.md):
     GET    /health          -> {"status": "ok"}
+    GET    /agents          -> [agent ids]
     POST   /memory/add      -> body Place, returns {"id": place.id}
     POST   /memory/search   -> body SearchRequest, returns [SearchHit]
-    GET    /memory/list     -> query agent_id + limit, returns page + total
+    GET    /memory/list     -> query agent_id + limit + offset, page + total
     GET    /memory/{id}     -> query agent_id, returns Place or 404
     PUT    /memory/{id}     -> body Place, path id must match, returns {"id"}
     DELETE /memory/{id}     -> query agent_id, returns {"deleted": true} or 404
@@ -15,8 +16,10 @@ Endpoints (see docs/api.md):
     POST   /meet/align      -> body two agents, runs meeting, logs MergeRecord
     GET    /merges          -> query limit, newest first merge history
     GET    /sync/queue      -> query agent_id + limit, ranked upload rows
+    GET    /sync/conflicts  -> query place_id, kept loser history
     GET    /fuse/threshold  -> live fuse threshold
-    PUT    /fuse/threshold  -> body threshold 0 to 1, moved by operators
+    PUT    /fuse/threshold  -> body threshold 0 to 1, persisted to disk
+    POST   /sync/push       -> push ranked queue, returns uploaded/unchanged/kept
 
 Run:
     uvicorn backend.app:app --port 8000
@@ -33,8 +36,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from edge.fuse import DEFAULT_FUSE_THRESHOLD
 from edge.cloud import CloudSync
+from edge.fuse import DEFAULT_FUSE_THRESHOLD
 from edge.merges import MergeLog, run_meeting
 from edge.models import (
     MergeRecord,
@@ -160,6 +163,7 @@ class SyncPushResponse(BaseModel):
 
     uploaded: int
     unchanged: int
+    kept: int = 0
     conflicts: list[ConflictEntry]
 
 
@@ -172,22 +176,44 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         for store in app.state.stores.values():
             store.close()
         app.state.stores.clear()
+        app.state.clouds.clear()
 
     app = FastAPI(title="Resonance Edge API", lifespan=lifespan)
-    # Dashboard runs on :5173 and calls this API, so allow browser access.
+    # Demo accepts browser calls from any origin (dashboard may run on
+    # :5173 locally or :80 in compose). Restrict via CORS_ORIGINS in prod.
+    origins = os.environ.get("CORS_ORIGINS", "*")
+    allow = ["*"] if origins.strip() == "*" else [o.strip() for o in origins.split(",")]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=allow,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     app.state.storage_root = storage_root
     stores: dict[str, PlaceStore] = {}
     app.state.stores = stores
+    app.state.clouds: dict[str, CloudSync] = {}
     app.state.merge_log = MergeLog(
         Path(storage_root) / "merges.json" if storage_root is not None else None
     )
+    app.state.threshold_path = (
+        Path(storage_root) / "threshold.txt" if storage_root is not None else None
+    )
     app.state.fuse_threshold = DEFAULT_FUSE_THRESHOLD
+    if app.state.threshold_path is not None and app.state.threshold_path.exists():
+        try:
+            app.state.fuse_threshold = float(
+                app.state.threshold_path.read_text(encoding="utf-8").strip()
+            )
+        except (OSError, ValueError):
+            pass
+    elif (Path("edge_data") / "threshold.txt").exists() and storage_root is None:
+        try:
+            app.state.fuse_threshold = float(
+                (Path("edge_data") / "threshold.txt").read_text(encoding="utf-8").strip()
+            )
+        except (OSError, ValueError):
+            pass
 
     def agent_anchors(agent_id: str) -> frozenset[str]:
         """Place ids that helped align this agent's maps so far."""
@@ -209,9 +235,26 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
             app.state.stores[agent_id] = store
         return store
 
+    def get_cloud(url: str) -> CloudSync:
+        cloud = app.state.clouds.get(url)
+        if cloud is None:
+            cloud = CloudSync(url=url, timeout=3)
+            app.state.clouds[url] = cloud
+        return cloud
+
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/agents", response_model=list[str])
+    def list_agents() -> list[str]:
+        known = set(app.state.stores.keys())
+        root = Path(storage_root) if storage_root is not None else None
+        if root is not None and root.exists():
+            for child in root.iterdir():
+                if child.is_dir():
+                    known.add(child.name)
+        return sorted(known)
 
     @app.post("/memory/add")
     def memory_add(place: Place) -> dict[str, str]:
@@ -245,10 +288,11 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
     def memory_list(
         agent_id: str,
         limit: int = Query(default=50, ge=1, le=200),
+        offset: Any | None = None,
     ) -> PlaceList:
         store = get_store(agent_id)
         try:
-            places, next_offset = store.list_places(limit=limit)
+            places, next_offset = store.list_places(limit=limit, offset=offset)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return PlaceList(
@@ -342,7 +386,30 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
     @app.put("/fuse/threshold")
     def set_threshold(body: ThresholdSet) -> dict[str, float]:
         app.state.fuse_threshold = body.threshold
+        path = app.state.threshold_path
+        if path is None:
+            path = Path("edge_data") / "threshold.txt"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(str(body.threshold), encoding="utf-8")
+        except OSError:
+            pass
         return {"threshold": app.state.fuse_threshold}
+
+    @app.get("/sync/conflicts", response_model=list[ConflictEntry])
+    def sync_conflicts(place_id: str) -> list[ConflictEntry]:
+        out: list[ConflictEntry] = []
+        for cloud in app.state.clouds.values():
+            for place in cloud.conflict_history(place_id):
+                out.append(
+                    ConflictEntry(
+                        id=place_id,
+                        winner_id=place_id,
+                        loser_id=place.id,
+                        reason="history",
+                    )
+                )
+        return out
 
     @app.post("/sync/push", response_model=SyncPushResponse)
     def sync_push(req: SyncPushRequest) -> SyncPushResponse:
@@ -355,7 +422,7 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         url = req.server_url or os.environ.get("QDRANT_URL", "http://localhost:6333")
         try:
-            cloud = CloudSync(url=url, timeout=3)
+            cloud = get_cloud(url)
             report = cloud.push_many([place for place, _, _ in ranked])
         except Exception as exc:
             raise HTTPException(
@@ -364,6 +431,7 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         return SyncPushResponse(
             uploaded=report.uploaded,
             unchanged=report.unchanged,
+            kept=report.kept,
             conflicts=[ConflictEntry(**vars(log)) for log in report.conflicts],
         )
 

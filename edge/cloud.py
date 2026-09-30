@@ -14,14 +14,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import numpy as np
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from edge.config import COLLECTION_NAME, DIM
 from edge.models import Place
-from edge.store import place_from_record, point_id_for
-from edge.sync import ConflictLog, resolve_conflict
+from edge.store import place_from_record, place_payload, point_id_for
+from edge.sync import ConflictLog, resolve_conflict, vectors_same
 
 
 @dataclass
@@ -30,32 +29,20 @@ class PushReport:
 
     uploaded: int = 0
     unchanged: int = 0
+    kept: int = 0
     conflicts: list[ConflictLog] = field(default_factory=list)
 
 
 def _server_payload(place: Place) -> dict:
     """Same payload shape the edge store uses, so both sides match."""
-    return {
-        "id": place.id,
-        "agent_id": place.agent_id,
-        "pose": {
-            "x": place.pose.x,
-            "y": place.pose.y,
-            "theta": place.pose.theta,
-        },
-        "timestamp": place.timestamp,
-        "confidence": place.confidence,
-        "zone": place.payload.zone,
-        "sensor": place.payload.sensor,
-        "note": place.payload.note,
-    }
+    return place_payload(place)
 
 
 def _looks_same(a: Place, b: Place) -> bool:
     """Same content across the edge/server boundary.
 
-    The server L2-normalizes vectors, so magnitudes never match.
-    Compare direction plus every metadata field instead.
+    Metadata must match exactly. Vectors compare by direction with a
+    float32 tolerant threshold because the server L2-normalizes.
     """
     if not (
         a.confidence == b.confidence
@@ -64,13 +51,7 @@ def _looks_same(a: Place, b: Place) -> bool:
         and a.payload == b.payload
     ):
         return False
-    va = np.array(a.vector, dtype=float)
-    vb = np.array(b.vector, dtype=float)
-    na = float(np.linalg.norm(va))
-    nb = float(np.linalg.norm(vb))
-    if na == 0.0 or nb == 0.0:
-        return list(a.vector) == list(b.vector)
-    return float(va @ vb / (na * nb)) >= 1.0 - 1e-6
+    return vectors_same(list(a.vector), list(b.vector))
 
 
 class CloudSync:
@@ -126,9 +107,9 @@ class CloudSync:
     def push_place(self, place: Place) -> tuple[str, ConflictLog | None]:
         """Push one place. Returns outcome plus the conflict log, if any.
 
-        Outcomes: uploaded (new or winner written), unchanged (same
-        bytes already on the server). Losers are never dropped, they
-        land in history.
+        Outcomes: uploaded (new or incoming winner written), unchanged
+        (same content already on server), kept (server winner kept, no
+        write). Losers are never dropped, they land in history.
         """
         existing = self._read_server(place.id)
         if existing is None:
@@ -138,9 +119,13 @@ class CloudSync:
             log = ConflictLog(place.id, place.id, place.id, "same")
             return "unchanged", log
         winner, log = resolve_conflict(existing, place, history=self.history)
-        if winner.id == place.id and list(winner.vector) == list(place.vector):
+        if vectors_same(list(winner.vector), list(place.vector)) and (
+            winner.confidence == place.confidence
+            and winner.timestamp == place.timestamp
+        ):
             self._write_server(winner)
-        return "uploaded", log
+            return "uploaded", log
+        return "kept", log
 
     def push_many(self, places: list[Place]) -> PushReport:
         """Push many places in rank order. Returns the full report."""
@@ -149,6 +134,8 @@ class CloudSync:
             outcome, log = self.push_place(place)
             if outcome == "unchanged":
                 report.unchanged += 1
+            elif outcome == "kept":
+                report.kept += 1
             else:
                 report.uploaded += 1
             if log is not None and log.reason != "same":

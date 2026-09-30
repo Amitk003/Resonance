@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from edge.align import estimate_transform
+from edge.align import _apply, estimate_transform
 from edge.config import EDGE_DATA_ROOT
 from edge.match import find_matches
-from edge.models import MergeRecord, Place, Transform
+from edge.models import MergeRecord, Transform
 
 if TYPE_CHECKING:
     from edge.store import PlaceStore
@@ -45,30 +45,36 @@ def run_meeting(
     swap = store_b.pick_swap(limit=swap_limit)
     if not swap:
         return None
-    places_a: list[Place] = []
-    offset = None
-    while True:
-        page, offset = store_a.list_places(limit=256, offset=offset)
-        places_a.extend(page)
-        if offset is None:
-            break
+    places_a = store_a.iter_all(page_size=256)
     matches = find_matches(places_a, swap, top_k=top_k, min_score=min_score)
     if len(matches) < 2:
         return None
     pose_a = {place.id: place.pose for place in places_a}
     pose_b = {cand.id: cand.pose for cand in swap}
     pairs = []
+    pair_match_ids: list[str] = []
     for match in matches:
         pa = pose_a.get(match.match_id)
         pb = pose_b.get(match.query_id)
         if pa is None or pb is None:
             continue
         pairs.append((pa.x, pa.y, pb.x, pb.y))
+        pair_match_ids.append(match.match_id)
     if len(pairs) < 2:
         return None
     estimate = estimate_transform(pairs, inlier_thresh=inlier_thresh)
     if estimate is None:
         return None
+    import numpy as _np
+
+    arr = _np.array(pairs, dtype=float)
+    err = _np.linalg.norm(
+        _apply(arr[:, 2:], estimate.dx, estimate.dy, estimate.dtheta) - arr[:, :2],
+        axis=1,
+    )
+    inlier_ids = [
+        mid for mid, e in zip(pair_match_ids, err.tolist()) if e < inlier_thresh
+    ]
     mean_score = sum(match.score for match in matches) / len(matches)
     shape_fit = estimate.shape_fit
     return MergeRecord(
@@ -83,7 +89,7 @@ def run_meeting(
         transform=Transform(
             dx=estimate.dx, dy=estimate.dy, dtheta=estimate.dtheta
         ),
-        anchor_ids=[match.match_id for match in matches],
+        anchor_ids=inlier_ids,
     )
 
 
@@ -109,7 +115,9 @@ class MergeLog:
 
     def _write_all(self, records: list[MergeRecord]) -> None:
         text = json.dumps([record.model_dump() for record in records], indent=1)
-        self.path.write_text(text, encoding="utf-8")
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(self.path)
 
     def append(self, record: MergeRecord) -> MergeRecord:
         """Add one record, oldest drop past the cap. Returns the record."""

@@ -76,8 +76,8 @@ History helpers in `src/searchHistory.ts` with vitest cover.
 ## Known limits
 
 - Memory list shows one page (max 200 rows). The API returns
-  `next_offset`, but paging controls are not built yet.
-- Agent switch covers robot-a and robot-b only. A backend
-  agent-list endpoint is needed before this can be dynamic.
+  `next_offset` and accepts `offset` for paging.
+- Agent switch loads GET /agents and falls back to robot-a and robot-b
+  when the backend is offline.
 - Seed demo sends one POST per place. Fine for 18 demo rows.
   Bulk import needs a backend bulk endpoint first.

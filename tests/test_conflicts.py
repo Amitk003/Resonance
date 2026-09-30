@@ -38,7 +38,7 @@ def test_newer_wins_on_full_tie():
 def test_identical_resend_keeps_history_empty():
     old = make_place(suffix=5, seed=5, confidence=0.8)
     history: dict = {}
-    winner, log = resolve_conflict(old, old.model_copy(deep=True), history=history)
+    _winner, log = resolve_conflict(old, old.model_copy(deep=True), history=history)
     assert log.reason == "same"
     assert history == {}
 

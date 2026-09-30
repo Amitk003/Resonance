@@ -48,6 +48,7 @@ export interface MergeRecord {
   mean_score: number;
   score: number;
   transform: Transform;
+  anchor_ids: string[];
 }
 
 export interface PlaceList {
@@ -131,8 +132,9 @@ export const api = {
   }): Promise<SearchHit[]> {
     return request("/memory/search", { method: "POST", body: JSON.stringify(params) });
   },
-  listPlaces(agent_id: string, limit: number): Promise<PlaceList> {
+  listPlaces(agent_id: string, limit: number, offset?: unknown): Promise<PlaceList> {
     const q = new URLSearchParams({ agent_id, limit: String(limit) });
+    if (offset !== undefined && offset !== null) q.set("offset", String(offset));
     return request("/memory/list?" + q.toString());
   },
   getPlace(agent_id: string, place_id: string): Promise<Place> {
@@ -183,6 +185,13 @@ export const api = {
       body: JSON.stringify({ threshold }),
     });
   },
+  listAgents(): Promise<string[]> {
+    return request("/agents");
+  },
+  listConflicts(place_id: string): Promise<ConflictEntry[]> {
+    const q = new URLSearchParams({ place_id });
+    return request("/sync/conflicts?" + q.toString());
+  },
 };
 
 export function formatTime(timestamp: number): string {
@@ -209,6 +218,7 @@ export interface ConflictEntry {
 export interface SyncPushResponse {
   uploaded: number;
   unchanged: number;
+  kept: number;
   conflicts: ConflictEntry[];
 }
 

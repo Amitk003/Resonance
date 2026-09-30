@@ -19,11 +19,11 @@ Short rules so four people can share one repo without stepping on toes.
 ## Docs and log
 
 - Docs go in `docs/` in simple words.
-- Every change adds a row on top of `CHANGELOG.md` with date, author, files, and why.
+- Use `git log` for history. Do not keep a separate changelog file.
 - The `memory/` folder stays local and never pushes.
 
 ## Checks
 
 Before review, run green locally: backend `pytest tests/ -q`,
 dashboard `npm test` plus `npm run build`, and keep the em dash
-scan clean: no `—` in code or docs.
+scan clean in code and docs.

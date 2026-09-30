@@ -2,9 +2,9 @@
  * stay in sync on agent names and page keys.
  */
 
-// Fixed pair for the demo. A third robot needs a backend agent-list
-// endpoint first (no such contract yet), then this becomes dynamic.
-export const AGENTS = ["robot-a", "robot-b"];
+// Fallback pair when the backend is offline. The header loads the real
+// list from GET /agents and replaces this.
+export const FALLBACK_AGENTS = ["robot-a", "robot-b"];
 
 export type PageKey = "memory" | "search" | "merges" | "sync";
 
