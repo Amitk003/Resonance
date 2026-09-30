@@ -86,3 +86,19 @@ Slim meeting unit, no zone or sensor text, so radio messages stay small:
 
 - Reasons: same, higher-confidence, more-votes, newer, tie-keep-existing
 - The loser stays in per-id version history, capped at 10, so no data is lost
+
+## Fuse decision
+
+```json
+{
+  "fuse": true,
+  "score": 0.91,
+  "threshold": 0.8,
+  "margin": 0.11,
+  "reason": "at-or-above-threshold"
+}
+```
+
+- Boundary counts as fuse
+- Reasons: at-or-above-threshold, below-threshold
+- Threshold default 0.8, operators move it live
