@@ -7,8 +7,7 @@ Endpoints (see docs/api.md):
     GET    /health          -> {"status": "ok"}
     GET    /agents          -> [agent ids]
     POST   /memory/add      -> body Place, returns {"id": place.id}
-    POST   /memory/search   -> body SearchRequest, returns [SearchHit]
-    GET    /memory/list     -> query agent_id + limit + offset, page + total
+    POST   /memory/bulk     -> body [Place] (1-200), returns {"ids": [...]}
     GET    /memory/{id}     -> query agent_id, returns Place or 404
     PUT    /memory/{id}     -> body Place, path id must match, returns {"id"}
     DELETE /memory/{id}     -> query agent_id, returns {"deleted": true} or 404
@@ -265,6 +264,24 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"id": pid}
+
+    @app.post("/memory/bulk")
+    def memory_bulk(places: list[Place]) -> dict[str, list[str]]:
+        if not isinstance(places, list) or not 1 <= len(places) <= 200:
+            raise HTTPException(
+                status_code=422, detail="body must hold 1 to 200 places"
+            )
+        by_agent: dict[str, list[Place]] = {}
+        for place in places:
+            by_agent.setdefault(place.agent_id, []).append(place)
+        ids: list[str] = []
+        for agent_id, group in by_agent.items():
+            store = get_store(agent_id)
+            try:
+                ids.extend(store.add_many(group))
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ids": ids}
 
     @app.post("/memory/search", response_model=list[SearchHit])
     def memory_search(req: SearchRequest) -> list[SearchHit]:

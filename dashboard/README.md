@@ -82,9 +82,10 @@ History helpers in `src/searchHistory.ts` with vitest cover.
 
 ## Known limits
 
-- Memory list shows one page (max 200 rows). The API returns
-  `next_offset` and accepts `offset` for paging.
+- Bulk import accepts 1 to 200 places per request through
+  POST /memory/bulk. Seed demo sends one request, not one per place.
+- Memory list has Prev and Next paging driven by `next_offset`, so
+  stores bigger than one page stay reachable. Filters and sort work
+  on the current page; search always covers the full store.
 - Agent switch loads GET /agents and falls back to robot-a and robot-b
   when the backend is offline.
-- Seed demo sends one POST per place. Fine for 18 demo rows.
-  Bulk import needs a backend bulk endpoint first.

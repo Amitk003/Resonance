@@ -32,3 +32,6 @@ Thumbs.db
 # Qdrant local data
 qdrant_data/
 edge_data/
+
+# Generated sim replay data (make it with: python -m sim.make_drift)
+sim/drift.json
