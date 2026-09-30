@@ -22,10 +22,9 @@ export default function App() {
       setBackendOk(h.status === "ok");
       try {
         const known = await api.listAgents();
-        if (known.length > 0) {
-          setAgents(known);
-          setAgent((prev) => (known.includes(prev) ? prev : known[0]));
-        }
+        const merged = Array.from(new Set([...FALLBACK_AGENTS, ...known])).sort();
+        setAgents(merged);
+        setAgent((prev) => (merged.includes(prev) ? prev : merged[0]));
       } catch {
         /* agents list is best effort */
       }

@@ -18,6 +18,13 @@ export default function MergesPage({ agents, reloadToken, onError, onNotice }: P
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [threshold, setThreshold] = useState(0.8);
 
+  useEffect(() => {
+    setAgentA((prev) => (agents.includes(prev) ? prev : agents[0] || "robot-a"));
+    setAgentB((prev) =>
+      agents.includes(prev) ? prev : agents[1] || agents[0] || "robot-b",
+    );
+  }, [agents]);
+
   const loadHistory = useCallback(async () => {
     setLoading(true);
     try {

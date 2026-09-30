@@ -1,0 +1,16 @@
+.git
+.gitignore
+memory/
+edge_data/
+qdrant_data/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dashboard/node_modules/
+dashboard/dist/
+Code Cubicle 6.0 Problem Statements.pdf
+idea1.md
