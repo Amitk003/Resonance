@@ -24,4 +24,6 @@ Short rules so four people can share one repo without stepping on toes.
 
 ## Checks
 
-Push runs the checks workflow: backend tests, em dash scan, dashboard build. Green before review.
+Before review, run green locally: backend `pytest tests/ -q`,
+dashboard `npm test` plus `npm run build`, and keep the em dash
+scan clean: no `—` in code or docs.
