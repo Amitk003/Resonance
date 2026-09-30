@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, getApiBase, setApiBase } from "./api";
-import { FALLBACK_AGENTS, PAGES, type PageKey } from "./common";
+import { FALLBACK_AGENTS, LEGAL_PAGES, PAGES, type PageKey } from "./common";
+import { useReveal } from "./hooks";
 import MemoryPage from "./pages/MemoryPage";
 import MergesPage from "./pages/MergesPage";
+import PrivacyPage from "./pages/PrivacyPage";
 import SearchPage from "./pages/SearchPage";
 import SyncPage from "./pages/SyncPage";
+import TermsPage from "./pages/TermsPage";
 
 export default function App() {
   const [page, setPage] = useState<PageKey>("memory");
@@ -37,6 +40,8 @@ export default function App() {
     checkHealth();
   }, [checkHealth]);
 
+  useReveal(page + reloadToken);
+
   function retryAll() {
     setError("");
     checkHealth();
@@ -62,8 +67,8 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="brand">
-          <h1>Resonance Memory</h1>
-          <p>Local place memory for each edge robot</p>
+          <h1>Resonance Console</h1>
+          <p>Inspect place memory, run meetings, push sync queue</p>
         </div>
         <div className="header-right">
           <span className="status" title="Backend connection state">
@@ -151,14 +156,32 @@ export default function App() {
           onError={setError}
           onNotice={setNotice}
         />
-      ) : (
+      ) : page === "sync" ? (
         <SyncPage
           agent={agent}
           reloadToken={reloadToken}
           onError={setError}
           onNotice={setNotice}
         />
+      ) : page === "privacy" ? (
+        <PrivacyPage />
+      ) : (
+        <TermsPage />
       )}
+
+      <footer className="footer">
+        <span>Resonance Console. Local ops build.</span>
+        <nav aria-label="Legal">
+          {LEGAL_PAGES.map((p) => (
+            <button key={p.key} className="link" onClick={() => setPage(p.key)}>
+              {p.label}
+            </button>
+          ))}
+          <a href="/docs" style={{ color: "inherit" }}>
+            API docs
+          </a>
+        </nav>
+      </footer>
     </div>
   );
 }

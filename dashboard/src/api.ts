@@ -58,7 +58,10 @@ export interface PlaceList {
 }
 
 export const VECTOR_DIM = 512;
-export const DEFAULT_API_BASE = "http://localhost:8000";
+/* Build time default for custom domains. Set VITE_API_BASE at build. */
+export const DEFAULT_API_BASE =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE ||
+  "http://localhost:8000";
 const STORAGE_KEY = "resonance.apiBase";
 
 export function getApiBase(): string {

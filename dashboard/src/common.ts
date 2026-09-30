@@ -6,13 +6,18 @@
 // list from GET /agents and replaces this.
 export const FALLBACK_AGENTS = ["robot-a", "robot-b"];
 
-export type PageKey = "memory" | "search" | "merges" | "sync";
+export type PageKey = "memory" | "search" | "merges" | "sync" | "privacy" | "terms";
 
 export const PAGES: { key: PageKey; label: string }[] = [
   { key: "memory", label: "Memory" },
   { key: "search", label: "Search results" },
   { key: "merges", label: "Merge history" },
   { key: "sync", label: "Sync status" },
+];
+
+export const LEGAL_PAGES: { key: PageKey; label: string }[] = [
+  { key: "privacy", label: "Privacy policy" },
+  { key: "terms", label: "Terms" },
 ];
 
 export function downloadJson(filename: string, data: unknown): void {
