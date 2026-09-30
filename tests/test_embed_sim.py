@@ -12,7 +12,14 @@ from edge.match import cosine_score
 from edge.models import Place
 from edge.store import PlaceStore
 from edge.sync import rank_places
-from sim.make_drift import TRUE_DTHETA, TRUE_DX, TRUE_DY, load_dataset, make_drift_dataset, save_dataset
+from sim.make_drift import (
+    TRUE_DTHETA,
+    TRUE_DX,
+    TRUE_DY,
+    load_dataset,
+    make_drift_dataset,
+    save_dataset,
+)
 
 
 def test_hash_embed_dim_and_deterministic() -> None:

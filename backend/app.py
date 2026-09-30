@@ -8,8 +8,6 @@ Endpoints (see docs/api.md):
     GET    /agents          -> [agent ids]
     POST   /memory/add      -> body Place, returns {"id": place.id}
     POST   /memory/bulk     -> body [Place] (1-200), returns {"ids": [...]}
-    POST   /memory/search   -> body SearchRequest, returns [SearchHit]
-    GET    /memory/list     -> query agent_id + limit + offset, page + total
     GET    /memory/{id}     -> query agent_id, returns Place or 404
     PUT    /memory/{id}     -> body Place, path id must match, returns {"id"}
     DELETE /memory/{id}     -> query agent_id, returns {"deleted": true} or 404

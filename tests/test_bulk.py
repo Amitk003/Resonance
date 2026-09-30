@@ -41,7 +41,6 @@ def test_bulk_rejects_over_limit(client):
     for p in places:
         p["id"] = f"robot-a-{p['id']}-{p['vector'][0]}"
     # ids above reuse suffix pattern but must stay unique; rebuild simply
-    seen = set()
     for i, p in enumerate(places):
         p["id"] = f"robot-a-{i}"
     r = client.post("/memory/bulk", json=places)
