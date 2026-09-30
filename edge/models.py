@@ -156,6 +156,7 @@ class MergeRecord(BaseModel):
     mean_score: float
     score: float = Field(ge=0.0, le=1.0)
     transform: Transform
+    anchor_ids: list[str] = Field(default_factory=list)
 
 
 class FuseDecision(BaseModel):

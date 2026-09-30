@@ -83,6 +83,7 @@ def run_meeting(
         transform=Transform(
             dx=estimate.dx, dy=estimate.dy, dtheta=estimate.dtheta
         ),
+        anchor_ids=[match.match_id for match in matches],
     )
 
 
