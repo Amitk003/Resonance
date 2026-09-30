@@ -58,7 +58,10 @@ export interface PlaceList {
 }
 
 export const VECTOR_DIM = 512;
-export const DEFAULT_API_BASE = "http://localhost:8000";
+/* Build time default for custom domains. Set VITE_API_BASE at build. */
+export const DEFAULT_API_BASE =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE ||
+  "http://localhost:8000";
 const STORAGE_KEY = "resonance.apiBase";
 
 export function getApiBase(): string {
@@ -102,7 +105,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await res.json();
       if (typeof body?.detail === "string") detail = body.detail;
       else if (Array.isArray(body?.detail)) {
-        detail = body.detail.map((d: { msg?: string }) => d.msg || "bad input").join("; ");
+        detail = body.detail
+          .map((d: { loc?: (string | number)[]; msg?: string }) => {
+            const field = d.loc ? d.loc.filter((x) => x !== "query").join(".") : "";
+            return (field ? field + ": " : "") + (d.msg || "bad input");
+          })
+          .join("; ");
       }
     } catch {
       /* keep status text */
@@ -133,11 +141,13 @@ export const api = {
     return request("/memory/search", { method: "POST", body: JSON.stringify(params) });
   },
   listPlaces(agent_id: string, limit: number, offset?: unknown): Promise<PlaceList> {
+    if (!agent_id || !agent_id.trim()) throw new ApiError(422, "agent_id: Field required");
     const q = new URLSearchParams({ agent_id, limit: String(limit) });
     if (offset !== undefined && offset !== null) q.set("offset", String(offset));
     return request("/memory/list?" + q.toString());
   },
   getPlace(agent_id: string, place_id: string): Promise<Place> {
+    if (!agent_id || !agent_id.trim()) throw new ApiError(422, "agent_id: Field required");
     const q = new URLSearchParams({ agent_id });
     return request("/memory/" + encodeURIComponent(place_id) + "?" + q.toString());
   },
@@ -148,6 +158,7 @@ export const api = {
     });
   },
   deletePlace(agent_id: string, place_id: string): Promise<{ deleted: boolean }> {
+    if (!agent_id || !agent_id.trim()) throw new ApiError(422, "agent_id: Field required");
     const q = new URLSearchParams({ agent_id });
     return request("/memory/" + encodeURIComponent(place_id) + "?" + q.toString(), {
       method: "DELETE",
@@ -167,6 +178,7 @@ export const api = {
     return request("/merges?" + q.toString());
   },
   syncQueue(agent_id: string, limit = 20): Promise<SyncItem[]> {
+    if (!agent_id || !agent_id.trim()) throw new ApiError(422, "agent_id: Field required");
     const q = new URLSearchParams({ agent_id, limit: String(limit) });
     return request("/sync/queue?" + q.toString());
   },

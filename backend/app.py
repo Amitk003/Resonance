@@ -37,6 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from edge.cloud import CloudSync
+from edge.config import EDGE_DATA_ROOT
 from edge.fuse import DEFAULT_FUSE_THRESHOLD
 from edge.merges import MergeLog, run_meeting
 from edge.models import (
@@ -249,8 +250,8 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
     @app.get("/agents", response_model=list[str])
     def list_agents() -> list[str]:
         known = set(app.state.stores.keys())
-        root = Path(storage_root) if storage_root is not None else None
-        if root is not None and root.exists():
+        root = Path(storage_root) if storage_root is not None else EDGE_DATA_ROOT
+        if root.exists():
             for child in root.iterdir():
                 if child.is_dir():
                     known.add(child.name)
@@ -286,7 +287,7 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
 
     @app.get("/memory/list", response_model=PlaceList)
     def memory_list(
-        agent_id: str,
+        agent_id: str = Query(..., description="Agent id, e.g. robot-a"),
         limit: int = Query(default=50, ge=1, le=200),
         offset: Any | None = None,
     ) -> PlaceList:
@@ -300,7 +301,10 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         )
 
     @app.get("/memory/{place_id}", response_model=Place)
-    def memory_get(place_id: str, agent_id: str) -> Place:
+    def memory_get(
+        place_id: str,
+        agent_id: str = Query(..., description="Agent id, e.g. robot-a"),
+    ) -> Place:
         store = get_store(agent_id)
         saved = store.get(place_id)
         if saved is None:
@@ -321,7 +325,10 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         return {"id": place.id}
 
     @app.delete("/memory/{place_id}")
-    def memory_delete(place_id: str, agent_id: str) -> dict[str, bool]:
+    def memory_delete(
+        place_id: str,
+        agent_id: str = Query(..., description="Agent id, e.g. robot-a"),
+    ) -> dict[str, bool]:
         store = get_store(agent_id)
         if not store.delete(place_id):
             raise HTTPException(status_code=404, detail="place not found")
@@ -365,7 +372,8 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
 
     @app.get("/sync/queue", response_model=list[SyncItem])
     def sync_queue(
-        agent_id: str, limit: int = Query(default=20, ge=1, le=100)
+        agent_id: str = Query(..., description="Agent id, e.g. robot-a"),
+        limit: int = Query(default=20, ge=1, le=100),
     ) -> list[SyncItem]:
         store = get_store(agent_id)
         try:
@@ -397,7 +405,9 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         return {"threshold": app.state.fuse_threshold}
 
     @app.get("/sync/conflicts", response_model=list[ConflictEntry])
-    def sync_conflicts(place_id: str) -> list[ConflictEntry]:
+    def sync_conflicts(
+        place_id: str = Query(..., description="Place id, e.g. robot-a-1"),
+    ) -> list[ConflictEntry]:
         out: list[ConflictEntry] = []
         for cloud in app.state.clouds.values():
             for place in cloud.conflict_history(place_id):

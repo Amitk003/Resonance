@@ -73,6 +73,13 @@ Typed client in `src/api.ts` matches `docs/api.md`.
 Pages live in `src/pages/`, shared bits in `src/common.ts`.
 History helpers in `src/searchHistory.ts` with vitest cover.
 
+## Custom domain
+
+- Local dev defaults to `http://localhost:8000`. Change it in the header.
+- Build with `VITE_API_BASE=https://api.example.com npm run build`.
+- Docker: `docker build --build-arg VITE_API_BASE=https://api.example.com ./dashboard`.
+- Static hosts: copy `public/CNAME.example` to `public/CNAME` with your host name.
+
 ## Known limits
 
 - Memory list shows one page (max 200 rows). The API returns
