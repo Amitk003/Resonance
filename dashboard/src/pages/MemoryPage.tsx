@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, formatTime, type Place } from "../api";
 import DetailPanel from "../components/DetailPanel";
 import PoseMap from "../components/PoseMap";
@@ -25,17 +25,31 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
   const [zone, setZone] = useState("all");
   const [sort, setSort] = useState<SortKey>("time");
   const [limit, setLimit] = useState(50);
+  const [hasMore, setHasMore] = useState(false);
+  const [pageNo, setPageNo] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  // Qdrant scroll offsets are opaque values from next_offset. The map
+  // remembers the offset each page started at so Prev can walk back.
+  const offsetByPage = useRef<Map<number, unknown>>(new Map([[1, null]]));
 
   const loadList = useCallback(
-    async (ag: string, lim: number) => {
+    async (ag: string, lim: number, page = 1, direction?: "next" | "prev") => {
       setLoading(true);
       try {
-        const data = await api.listPlaces(ag, lim);
+        const off = page > 1 ? offsetByPage.current.get(page) : null;
+        const data = await api.listPlaces(ag, lim, off);
+        if (page > 1) offsetByPage.current.set(page, off);
+        if (data.next_offset != null) {
+          offsetByPage.current.set(page + 1, data.next_offset);
+        }
         setPlaces(data.places);
         setTotal(data.total);
+        setHasMore(data.next_offset != null);
+        if (direction === "next") setPageNo((n) => n + 1);
+        else if (direction === "prev") setPageNo((n) => Math.max(1, n - 1));
+        else setPageNo(page);
         setSelectedId((prev) =>
           prev && data.places.some((p) => p.id === prev) ? prev : null,
         );
@@ -51,6 +65,7 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
   useEffect(() => {
     setQuery("");
     setZone("all");
+    offsetByPage.current = new Map([[1, null]]);
     loadList(agent, limit);
   }, [agent, limit, reloadToken, loadList]);
 
@@ -61,7 +76,17 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
 
   function handleChanged(message: string) {
     onNotice(message);
-    loadList(agent, limit);
+    loadList(agent, limit, pageNo);
+  }
+
+  function nextPage() {
+    if (!hasMore || loading) return;
+    loadList(agent, limit, pageNo + 1, "next");
+  }
+
+  function prevPage() {
+    if (pageNo <= 1 || loading) return;
+    loadList(agent, limit, pageNo - 1, "prev");
   }
 
   async function seedDemo() {
@@ -69,10 +94,9 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
     try {
       const fresh = await api.listPlaces(agent, 200);
       const demo = buildDemoPlaces(agent, fresh.places);
-      for (const p of demo) {
-        await api.addPlace(p);
-      }
-      onNotice(demo.length + " demo places added to " + agent + ".");
+      await api.bulkAddPlaces(demo);
+      onNotice(demo.length + " demo places added to " + agent + " in one request.");
+      offsetByPage.current = new Map([[1, null]]);
       loadList(agent, limit);
     } catch (e) {
       onError(e instanceof Error ? e.message : "Seed failed");
@@ -140,7 +164,7 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
       <div className="layout">
         <section className="card">
           <h2>
-            Memory list ({visible.length} of {total})
+            Memory list ({visible.length} shown of {total} stored)
           </h2>
           {showAdd && (
             <div className="card" style={{ marginBottom: 10 }}>
@@ -198,6 +222,16 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
             <button onClick={() => loadList(agent, limit)} disabled={loading}>
               {loading ? "Loading" : "Refresh"}
             </button>
+            <button onClick={prevPage} disabled={loading || pageNo <= 1}>
+              Prev
+            </button>
+            <span aria-label="Page number" style={{ alignSelf: "center", fontSize: 13 }}>
+              Page {pageNo}
+              {total > limit ? ` of ${Math.ceil(total / limit)}` : ""}
+            </span>
+            <button onClick={nextPage} disabled={loading || !hasMore}>
+              Next
+            </button>
             <button onClick={() => setShowAdd((v) => !v)}>
               {showAdd ? "Close form" : "Add place"}
             </button>
@@ -218,9 +252,11 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
 
           {visible.length === 0 && !loading ? (
             <div className="empty">
-              {places.length === 0
+              {total === 0
                 ? "No places stored for " + agent + " yet."
-                : "No places match the current filters."}
+                : places.length === 0
+                  ? "No places on this page."
+                  : "No places match the current filters."}
             </div>
           ) : (
             <table className="grid">
