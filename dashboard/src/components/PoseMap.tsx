@@ -11,6 +11,10 @@ const W = 300;
 const H = 220;
 const PAD = 26;
 
+const LABEL = "#9aa3c0";
+const DOT = "#67e8f9";
+const SELECTED = "#a78bfa";
+
 export default function PoseMap({ places, selectedId, onSelect }: Props) {
   const view = useMemo(() => {
     if (places.length === 0) return null;
@@ -45,10 +49,10 @@ export default function PoseMap({ places, selectedId, onSelect }: Props) {
   return (
     <div className="map-wrap">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Pose map">
-        <text x={4} y={H - 6} fill="#93a3b8" fontSize="9">
+        <text x={4} y={H - 6} fill={LABEL} fontSize="9">
           x {view.minX.toFixed(1)} to {view.maxX.toFixed(1)} m
         </text>
-        <text x={4} y={12} fill="#93a3b8" fontSize="9">
+        <text x={4} y={12} fill={LABEL} fontSize="9">
           y {view.minY.toFixed(1)} to {view.maxY.toFixed(1)} m
         </text>
         {places.map((p) => {
@@ -71,7 +75,7 @@ export default function PoseMap({ places, selectedId, onSelect }: Props) {
                   cy={cy}
                   r={9}
                   fill="none"
-                  stroke="#34d399"
+                  stroke={SELECTED}
                   strokeWidth={1.5}
                 />
               )}
@@ -79,7 +83,7 @@ export default function PoseMap({ places, selectedId, onSelect }: Props) {
                 cx={cx}
                 cy={cy}
                 r={5}
-                fill={selected ? "#34d399" : "#60a5fa"}
+                fill={selected ? SELECTED : DOT}
                 opacity={selected ? 1 : 0.75}
               />
               <line
@@ -87,7 +91,7 @@ export default function PoseMap({ places, selectedId, onSelect }: Props) {
                 y1={cy}
                 x2={tx}
                 y2={ty}
-                stroke={selected ? "#34d399" : "#93a3b8"}
+                stroke={selected ? SELECTED : LABEL}
                 strokeWidth={1.5}
               />
             </g>

@@ -225,7 +225,7 @@ export default function MemoryPage({ agent, reloadToken, onError, onNotice }: Pr
             <button onClick={prevPage} disabled={loading || pageNo <= 1}>
               Prev
             </button>
-            <span aria-label="Page number" style={{ alignSelf: "center", fontSize: 13 }}>
+            <span aria-label="Page number" className="page-chip">
               Page {pageNo}
               {total > limit ? ` of ${Math.ceil(total / limit)}` : ""}
             </span>

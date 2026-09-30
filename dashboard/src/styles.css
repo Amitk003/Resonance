@@ -1,18 +1,25 @@
-/* Resonance dashboard theme. Simple dark style, no external UI library. */
+/* Resonance dashboard theme. Deep ink background with an indigo and
+ * violet accent, plus a cyan partner colour for maps and bars.
+ * Simple dark style, no external UI library. */
 
 :root {
-  --bg: #10151d;
-  --panel: #18202c;
-  --panel2: #1f2937;
-  --line: #2c3a4e;
-  --text: #e8eef6;
-  --muted: #93a3b8;
-  --accent: #34d399;
-  --accent-dim: #14532d;
+  --bg: #0b0d14;
+  --panel: #141826;
+  --panel2: #1c2233;
+  --line: #2a3350;
+  --line-soft: #222a42;
+  --text: #eef0fa;
+  --muted: #9aa3c0;
+  --accent: #a78bfa;
+  --accent-deep: #7c5cf5;
+  --accent-dim: #272147;
+  --accent-text: #d6ccff;
+  --accent2: #67e8f9;
+  --ok: #4ade80;
   --warn: #fbbf24;
-  --danger: #f87171;
-  --info: #60a5fa;
-  --radius: 10px;
+  --danger: #fb7185;
+  --radius: 12px;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -21,7 +28,10 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(1000px 500px at 80% -10%, rgba(124, 92, 245, 0.14), transparent 60%),
+    radial-gradient(800px 400px at 0% 0%, rgba(103, 232, 249, 0.07), transparent 55%),
+    var(--bg);
   color: var(--text);
   font-family: "Segoe UI", system-ui, Arial, sans-serif;
   font-size: 14px;
@@ -42,14 +52,20 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: var(--panel);
+  background: linear-gradient(180deg, rgba(124, 92, 245, 0.12), transparent 70%), var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 .brand h1 {
   margin: 0;
   font-size: 20px;
+  letter-spacing: 0.02em;
+  background: linear-gradient(90deg, var(--accent-text), var(--accent2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .brand p {
@@ -70,7 +86,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: 999px;
   border: 1px solid var(--line);
   font-size: 12px;
   background: var(--panel2);
@@ -84,21 +100,23 @@ body {
 }
 
 .dot.on {
-  background: var(--accent);
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.7);
 }
 
 .dot.off {
   background: var(--danger);
+  box-shadow: 0 0 8px rgba(251, 113, 133, 0.7);
 }
 
-/* Agent switch */
+/* Agent switch and page tabs */
 
 .agent-switch {
   display: flex;
   gap: 6px;
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 4px;
 }
 
@@ -112,10 +130,15 @@ button {
   border-radius: 8px;
   padding: 7px 14px;
   font-size: 13px;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
 }
 
 button:hover:not(:disabled) {
   border-color: var(--accent);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 button:disabled {
@@ -124,14 +147,20 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--accent-dim);
+  background: linear-gradient(135deg, var(--accent-deep), #5b3fd6);
+  border-color: var(--accent-deep);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
   border-color: var(--accent);
-  color: #d1fae5;
+  filter: brightness(1.1);
 }
 
 button.danger {
   border-color: var(--danger);
-  color: #fecaca;
+  color: #ffd4db;
 }
 
 button.small {
@@ -142,6 +171,7 @@ button.small {
 button.active {
   background: var(--accent-dim);
   border-color: var(--accent);
+  color: var(--accent-text);
 }
 
 input,
@@ -157,6 +187,7 @@ select {
 input:focus,
 select:focus {
   outline: 1px solid var(--accent);
+  border-color: var(--accent);
 }
 
 /* Banners */
@@ -175,10 +206,12 @@ select:focus {
 
 .banner.error {
   border-color: var(--danger);
+  background: linear-gradient(180deg, rgba(251, 113, 133, 0.1), transparent 80%), var(--panel);
 }
 
 .banner.notice {
   border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(167, 139, 250, 0.1), transparent 80%), var(--panel);
 }
 
 /* Stats */
@@ -191,10 +224,21 @@ select:focus {
 }
 
 .stat {
+  position: relative;
+  overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 12px 16px;
+}
+
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+  opacity: 0.8;
 }
 
 .stat .label {
@@ -206,6 +250,7 @@ select:focus {
   font-size: 22px;
   font-weight: 600;
   margin-top: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Main layout */
@@ -229,11 +274,22 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 14px 16px;
+  box-shadow: var(--shadow);
 }
 
 .card h2 {
   margin: 0 0 10px;
   font-size: 15px;
+}
+
+.card h2::after {
+  content: "";
+  display: block;
+  width: 44px;
+  height: 2px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
 }
 
 /* Toolbar */
@@ -254,6 +310,19 @@ select:focus {
   width: 100%;
 }
 
+/* Page number chip in the toolbar */
+
+.page-chip {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Table */
 
 table.grid {
@@ -266,17 +335,19 @@ table.grid th,
 table.grid td {
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 table.grid th {
   color: var(--muted);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 table.grid tr.selected td {
-  background: rgba(52, 211, 153, 0.08);
+  background: rgba(167, 139, 250, 0.1);
 }
 
 table.grid tr:hover td {
@@ -297,15 +368,16 @@ table.grid tr:hover td {
 
 .conf-fill {
   height: 100%;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent2));
 }
 
 .badge {
   display: inline-block;
   padding: 2px 10px;
-  border-radius: 4px;
-  background: var(--panel2);
+  border-radius: 999px;
+  background: var(--accent-dim);
   border: 1px solid var(--line);
+  color: var(--accent-text);
   font-size: 12px;
 }
 
@@ -344,7 +416,7 @@ table.grid tr:hover td {
 }
 
 pre.json {
-  background: #0b0f16;
+  background: #080a11;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
@@ -358,7 +430,9 @@ pre.json {
 .map-wrap svg {
   width: 100%;
   height: auto;
-  background: #0b0f16;
+  background:
+    radial-gradient(500px 260px at 70% 20%, rgba(124, 92, 245, 0.12), transparent 60%),
+    #080a11;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -385,6 +459,7 @@ pre.json {
 .slider-row input[type="range"] {
   flex: 1;
   padding: 0;
+  accent-color: var(--accent);
 }
 
 /* Form */
@@ -411,8 +486,23 @@ pre.json {
 }
 
 .score {
-  color: var(--accent);
+  color: var(--accent2);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Verdict badges for fuse and log rows */
+
+.badge.fuse {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.badge.log {
+  border-color: var(--warn);
+  color: var(--warn);
+  background: rgba(251, 191, 36, 0.08);
 }
 
 /* Scroll reveal. Cards fade up once when they enter view. No cursor effects. */
