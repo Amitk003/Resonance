@@ -7,6 +7,7 @@ import {
   type SyncPushResponse,
 } from "../api";
 import { downloadJson } from "../common";
+import ThresholdControl from "../components/ThresholdControl";
 
 interface Props {
   agent: string;
@@ -19,7 +20,6 @@ export default function SyncPage({ agent, reloadToken, onError, onNotice }: Prop
   const [queue, setQueue] = useState<SyncItem[]>([]);
   const [history, setHistory] = useState<MergeRecord[]>([]);
   const [threshold, setThreshold] = useState(0.8);
-  const [draft, setDraft] = useState("0.80");
   const [loading, setLoading] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [lastPush, setLastPush] = useState<SyncPushResponse | null>(null);
@@ -35,7 +35,6 @@ export default function SyncPage({ agent, reloadToken, onError, onNotice }: Prop
       setQueue(rows);
       setHistory(merges);
       setThreshold(live.threshold);
-      setDraft(live.threshold.toFixed(2));
     } catch (e) {
       onError(e instanceof Error ? e.message : "Load failed");
     } finally {
@@ -47,21 +46,6 @@ export default function SyncPage({ agent, reloadToken, onError, onNotice }: Prop
     loadAll();
   }, [reloadToken, loadAll]);
 
-  async function saveThreshold() {
-    const value = Number(draft);
-    if (Number.isNaN(value) || value < 0 || value > 1) {
-      onError("Threshold must be a number from 0 to 1.");
-      return;
-    }
-    try {
-      const live = await api.setThreshold(value);
-      setThreshold(live.threshold);
-      onNotice("Fuse threshold saved at " + live.threshold.toFixed(2) + ".");
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Save failed");
-    }
-  }
-
   async function pushNow() {
     setPushing(true);
     try {
@@ -69,7 +53,7 @@ export default function SyncPage({ agent, reloadToken, onError, onNotice }: Prop
       setLastPush(report);
       onNotice(
         "Push done: " + report.uploaded + " uploaded, " +
-        report.unchanged + " unchanged, " +
+        report.unchanged + " unchanged, " + (report.kept || 0) + " kept, " +
         report.conflicts.length + " conflicts.",
       );
       await loadAll();
@@ -84,23 +68,12 @@ export default function SyncPage({ agent, reloadToken, onError, onNotice }: Prop
     <div className="layout">
       <section className="card">
         <h2>Fuse threshold for {agent}</h2>
-        <div className="slider-row">
-          <label>Threshold: {Number(draft || 0).toFixed(2)}</label>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={Number.isNaN(Number(draft)) ? threshold : Number(draft)}
-            onChange={(e) => setDraft(e.target.value)}
-            aria-label="Fuse threshold"
-          />
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="primary" onClick={saveThreshold}>
-            Save threshold
-          </button>
-        </div>
+        <ThresholdControl
+          value={threshold}
+          onSaved={setThreshold}
+          onError={onError}
+          onNotice={onNotice}
+        />
         <p style={{ fontSize: 12, color: "var(--muted)" }}>
           Live value {threshold.toFixed(2)}. Merges at or above it fuse,
           below it only log. Move it and watch the verdicts change.
@@ -162,6 +135,8 @@ export default function SyncPage({ agent, reloadToken, onError, onNotice }: Prop
                 <dd>{lastPush.uploaded}</dd>
                 <dt>Unchanged</dt>
                 <dd>{lastPush.unchanged}</dd>
+                <dt>Kept</dt>
+                <dd>{lastPush.kept || 0}</dd>
                 <dt>Conflicts</dt>
                 <dd>{lastPush.conflicts.length}</dd>
               </dl>

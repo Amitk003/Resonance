@@ -114,6 +114,11 @@ def _place_payload(place: Place) -> dict:
     }
 
 
+def place_payload(place: Place) -> dict:
+    """Public payload builder shared by the edge store and cloud sync."""
+    return _place_payload(place)
+
+
 def _clean_str_list(values: list[str] | None, name: str) -> list[str]:
     """Check a match-any filter list. None and empty mean no filter."""
     return validate_str_list(values, name) or []
@@ -181,7 +186,7 @@ class PlaceStore:
         """
         try:
             schema = self._client.get_collection(self.collection).payload_schema or {}
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - old local DBs must keep working
             logger.warning("Could not read payload schema: %s", exc)
             return
         for field in SEARCH_INDEX_FIELDS:
@@ -193,7 +198,7 @@ class PlaceStore:
                     field_name=field,
                     field_schema=_PAYLOAD_INDEXES[field],
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - missing index is non-fatal
                 logger.warning(
                     "Could not create payload index for '%s': %s", field, exc
                 )
@@ -317,9 +322,10 @@ class PlaceStore:
 
     def delete(self, place_id: str) -> bool:
         """Delete one Place by id. Returns True if it existed."""
+        pid = _qdrant_point_id(place_id)
         points = self._client.retrieve(
             collection_name=self.collection,
-            ids=[_qdrant_point_id(place_id)],
+            ids=[pid],
             with_payload=False,
             with_vectors=False,
         )
@@ -327,9 +333,20 @@ class PlaceStore:
             return False
         self._client.delete(
             collection_name=self.collection,
-            points_selector=[_qdrant_point_id(place_id)],
+            points_selector=[pid],
         )
         return True
+
+    def iter_all(self, page_size: int = 256) -> list[Place]:
+        """Read the whole store into memory. Shared by swap, match, sync."""
+        places: list[Place] = []
+        offset = None
+        while True:
+            page, offset = self.list_places(limit=page_size, offset=offset)
+            places.extend(page)
+            if offset is None:
+                break
+        return places
 
     def list_places(
         self, limit: int = 50, offset: Any = None
@@ -370,13 +387,7 @@ class PlaceStore:
             or not 1 <= limit <= 100
         ):
             raise ValueError("limit must be an int in [1, 100]")
-        places: list[Place] = []
-        offset = None
-        while True:
-            page, offset = self.list_places(limit=_SCAN_PAGE, offset=offset)
-            places.extend(page)
-            if offset is None:
-                break
+        places = self.iter_all(page_size=_SCAN_PAGE)
         places.sort(
             key=lambda p: (
                 HAZARD_KEYWORD in p.payload.note.lower(),
@@ -392,11 +403,12 @@ class PlaceStore:
 
         Note: delete_collection + recreate does not reliably reset
         Qdrant 1.12 local mode, so we delete all points by id instead.
+        Each pass restarts from offset None because deletes invalidate
+        the scroll cursor.
         """
-        offset = None
         while True:
-            points, offset = self._client.scroll(
-                collection_name=self.collection, limit=256, offset=offset,
+            points, _ = self._client.scroll(
+                collection_name=self.collection, limit=256,
                 with_payload=False, with_vectors=False,
             )
             if not points:
@@ -405,12 +417,10 @@ class PlaceStore:
                 collection_name=self.collection,
                 points_selector=[pt.id for pt in points],
             )
-            if offset is None:
-                break
 
     def close(self) -> None:
         """Flush and release the local DB handle (needed for restart tests)."""
         try:
             self._client.close()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - close must never raise
             logger.warning("Qdrant client did not close cleanly: %s", exc)

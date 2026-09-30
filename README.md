@@ -38,7 +38,7 @@ docker compose up --build
 Backend only:
 
 ```bash
-pip install -r requirements.txt -r requirements-dev.txt
+pip install -r requirements.txt
 uvicorn backend.app:app --port 8000
 pytest tests/ -q
 ```
@@ -54,12 +54,11 @@ npm run dev
 ## What is inside
 
 - `edge/` - offline memory: store, search with filters, swap pick, match, align, sync ranking, conflicts
-- `backend/` - FastAPI over the edge layer: memory, search, update, delete, list, swap
-- `dashboard/` - React memory view, query builder search page, pose map, merge-ready panels
-- `sim/` - coming next: two robot drift simulation with scores
+- `backend/` - FastAPI over the edge layer: memory, search, update, delete, list, swap, meeting, sync, push
+- `dashboard/` - React memory view, search page, pose map, merge history, sync status with threshold and export
 - `docs/` - architecture, data model, API, sync policy, demo, roadmap, tech stack
 - `docker-compose.yml` - Qdrant Server plus backend plus dashboard in one command
 
 ## Status
 
-Edge memory, search with filters, swap, match, align, sync ranking, and conflicts all run offline with 85 backend tests and 17 dashboard tests green. Next: meeting and sync endpoints, Qdrant Server link, merge history view, and the full two robot demo.
+Edge memory, search, swap, match, align, fuse gate, meeting APIs, sync queue, server push, and dashboard pages all run with backend `pytest` and dashboard `npm test` green. Next: two robot drift demo and real embedding model wiring.

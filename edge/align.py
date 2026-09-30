@@ -15,15 +15,22 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def normalize_angle(value: float) -> float:
+    """Wrap radians into [-pi, pi]."""
+    return float((value + math.pi) % (2.0 * math.pi) - math.pi)
+
+
 def _fit_two(a1: np.ndarray, a2: np.ndarray, b1: np.ndarray, b2: np.ndarray) -> tuple[float, float, float]:
     """Fit rigid B->A from 2 point pairs. Returns (dx, dy, dtheta)."""
     da = a2 - a1
     db = b2 - b1
+    if float(np.linalg.norm(da)) < 1e-9 or float(np.linalg.norm(db)) < 1e-9:
+        raise ValueError("duplicate points carry no heading info")
     dtheta = float(math.atan2(da[1], da[0]) - math.atan2(db[1], db[0]))
     c, s = math.cos(dtheta), math.sin(dtheta)
     r00, r01, r10, r11 = c, -s, s, c
     t = a1 - np.array([r00 * b1[0] + r01 * b1[1], r10 * b1[0] + r11 * b1[1]])
-    return float(t[0]), float(t[1]), float(dtheta)
+    return float(t[0]), float(t[1]), float(normalize_angle(dtheta))
 
 
 def _fit_kabsch(a: np.ndarray, b: np.ndarray) -> tuple[float, float, float]:
@@ -38,7 +45,7 @@ def _fit_kabsch(a: np.ndarray, b: np.ndarray) -> tuple[float, float, float]:
         r = vt.T @ u.T
     dtheta = float(math.atan2(r[1, 0], r[0, 0]))
     t = ca - r @ cb
-    return float(t[0]), float(t[1]), dtheta
+    return float(t[0]), float(t[1]), normalize_angle(dtheta)
 
 
 def _apply(b: np.ndarray, dx: float, dy: float, dtheta: float) -> np.ndarray:
@@ -50,7 +57,7 @@ def _apply(b: np.ndarray, dx: float, dy: float, dtheta: float) -> np.ndarray:
 class AlignEstimate:
     """Result of estimate_transform. Lightweight, no pydantic needed."""
 
-    __slots__ = ("dx", "dy", "dtheta", "inliers", "total")
+    __slots__ = ("dtheta", "dx", "dy", "inliers", "total")
 
     def __init__(self, dx: float, dy: float, dtheta: float, inliers: int, total: int) -> None:
         self.dx = dx
@@ -67,7 +74,7 @@ class AlignEstimate:
 def estimate_transform(
     pairs: list[tuple[float, float, float, float]],
     inlier_thresh: float = 0.5,
-    iters: int = 100,
+    iters: int = 20,
     seed: int = 0,
 ) -> AlignEstimate | None:
     """RANSAC rigid fit of B points into A points.
@@ -75,11 +82,12 @@ def estimate_transform(
     Args:
         pairs: list of (ax, ay, bx, by), A=own map, B=other map.
         inlier_thresh: meters; a pair is an inlier when mapped error below it.
-        iters: RANSAC rounds. seed: determinism for tests.
+        iters: RANSAC rounds (20 is enough for swap sets under 100).
+        seed: determinism for tests.
 
     Returns:
         AlignEstimate or None when fewer than 2 pairs or no consensus.
-        No threshold gate here; Task 13 decides fuse vs log.
+        Raises ValueError for malformed or non-finite pairs.
     """
     n = len(pairs)
     if n < 2:
@@ -96,7 +104,7 @@ def estimate_transform(
         i, j = rng.choice(n, size=2, replace=False)
         try:
             dx, dy, dt = _fit_two(a[i], a[j], b[i], b[j])
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - skip degenerate RANSAC samples
             logger.debug("RANSAC sample skipped: %s", exc)
             continue
         err = np.linalg.norm(_apply(b, dx, dy, dt) - a, axis=1)

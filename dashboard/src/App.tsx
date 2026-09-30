@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, getApiBase, setApiBase } from "./api";
-import { AGENTS, PAGES, type PageKey } from "./common";
+import { FALLBACK_AGENTS, PAGES, type PageKey } from "./common";
 import MemoryPage from "./pages/MemoryPage";
 import MergesPage from "./pages/MergesPage";
 import SearchPage from "./pages/SearchPage";
@@ -10,7 +10,8 @@ export default function App() {
   const [page, setPage] = useState<PageKey>("memory");
   const [baseInput, setBaseInput] = useState(getApiBase());
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
-  const [agent, setAgent] = useState(AGENTS[0]);
+  const [agents, setAgents] = useState<string[]>(FALLBACK_AGENTS);
+  const [agent, setAgent] = useState(FALLBACK_AGENTS[0]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
@@ -19,6 +20,15 @@ export default function App() {
     try {
       const h = await api.health();
       setBackendOk(h.status === "ok");
+      try {
+        const known = await api.listAgents();
+        if (known.length > 0) {
+          setAgents(known);
+          setAgent((prev) => (known.includes(prev) ? prev : known[0]));
+        }
+      } catch {
+        /* agents list is best effort */
+      }
     } catch {
       setBackendOk(false);
     }
@@ -80,7 +90,7 @@ export default function App() {
           <button onClick={applyBaseUrl}>Connect</button>
           <button onClick={retryAll}>Retry</button>
           <div className="agent-switch" role="group" aria-label="Agent">
-            {AGENTS.map((a) => (
+            {agents.map((a) => (
               <button
                 key={a}
                 className={a === agent ? "active" : ""}
@@ -137,6 +147,7 @@ export default function App() {
         />
       ) : page === "merges" ? (
         <MergesPage
+          agents={agents}
           reloadToken={reloadToken}
           onError={setError}
           onNotice={setNotice}

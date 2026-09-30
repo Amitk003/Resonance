@@ -51,11 +51,24 @@ def find_matches(
         or not -1.0 <= min_score <= 1.0
     ):
         raise ValueError("min_score must be in [-1, 1]")
+    if not own_places or not other:
+        return []
+    own_matrix = np.array([p.vector for p in own_places], dtype=float)
+    own_norms = np.linalg.norm(own_matrix, axis=1)
+    own_norms[own_norms == 0.0] = 1.0
+    own_unit = own_matrix / own_norms[:, None]
     matches: list[PlaceMatch] = []
     for cand in other:
-        scored = [
-            (cosine_score(cand.vector, place.vector), place) for place in own_places
-        ]
+        vec = np.array(cand.vector, dtype=float)
+        norm = float(np.linalg.norm(vec))
+        if norm == 0.0:
+            scored = [(0.0, place) for place in own_places]
+        else:
+            sims = own_unit @ (vec / norm)
+            scored = [
+                (float(max(-1.0, min(1.0, s))), place)
+                for s, place in zip(sims.tolist(), own_places)
+            ]
         scored.sort(key=lambda row: (-row[0], row[1].id))
         for score, place in scored[:top_k]:
             if score < min_score:
@@ -65,7 +78,7 @@ def find_matches(
                     pair_id=make_pair_id(cand.id, place.id),
                     query_id=cand.id,
                     match_id=place.id,
-                    score=round(score, 6),
+                    score=float(score),
                 )
             )
     return matches
@@ -91,13 +104,7 @@ def match_agents(
         or not 1 <= swap_limit <= 100
     ):
         raise ValueError("swap_limit must be an int in [1, 100]")
-    places: list[Place] = []
-    offset = None
-    while True:
-        page, offset = own.list_places(limit=256, offset=offset)
-        places.extend(page)
-        if offset is None:
-            break
+    places = own.iter_all(page_size=256)
     return find_matches(
         places,
         other.pick_swap(limit=swap_limit),

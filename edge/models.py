@@ -32,7 +32,7 @@ class Payload(BaseModel):
     @classmethod
     def _must_be_str(cls, v: Any) -> str:
         if not isinstance(v, str):
-            raise ValueError("payload fields must be strings")
+            raise ValueError("payload fields must be strings")  # noqa: TRY004 - Pydantic expects ValueError
         return v
 
 
@@ -43,12 +43,12 @@ def validate_vector(v: Any, dim: int = DIM) -> list[float]:
     Raises ValueError for anything else.
     """
     if not isinstance(v, list):
-        raise ValueError("vector must be a list of floats")
+        raise ValueError("vector must be a list of floats")  # noqa: TRY004 - API maps ValueError to 400/422
     if len(v) != dim:
         raise ValueError(f"vector must have exactly {dim} values, got {len(v)}")
     for item in v:
         if not isinstance(item, (int, float)):
-            raise ValueError("vector values must be numeric")
+            raise ValueError("vector values must be numeric")  # noqa: TRY004 - API maps ValueError to 400/422
     return [float(x) for x in v]
 
 
@@ -61,7 +61,7 @@ def validate_str_list(v: Any, name: str) -> list[str] | None:
     if v is None:
         return None
     if not isinstance(v, list):
-        raise ValueError(f"{name} must be a list of strings or omitted")
+        raise ValueError(f"{name} must be a list of strings or omitted")  # noqa: TRY004 - API maps ValueError to 400/422
     for item in v:
         if not isinstance(item, str) or not item:
             raise ValueError(f"{name} must hold non-empty strings")

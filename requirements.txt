@@ -1,5 +1,11 @@
+# Runtime deps are pinned for reproducible edge builds.
+# qdrant-client stays on 1.12.x because local mode scroll/delete behavior
+# is verified against it; newer clients rename query_vector to query.
 qdrant-client==1.12.2
 pydantic==2.10.4
 numpy==1.26.4
 fastapi==0.115.14
 uvicorn==0.54.0
+# Test deps (kept here so one file installs everything).
+httpx==0.28.1
+pytest==8.3.4

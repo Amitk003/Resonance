@@ -17,6 +17,8 @@ from edge.models import HAZARD_KEYWORD, Place
 if TYPE_CHECKING:
     from edge.store import PlaceStore
 
+import numpy as _np
+
 # Score weights. They add up to 1.0 so the result stays in [0, 1].
 HAZARD_WEIGHT: float = 0.4
 ANCHOR_WEIGHT: float = 0.3
@@ -80,26 +82,25 @@ def select_upload(
     limit: int = 20,
     anchors: frozenset[str] = frozenset(),
 ) -> list[tuple[Place, float, list[str]]]:
-    """Top ranked places from one agent store, best first.
-
-    Reads the whole local store through pages, ranks in memory, and
-    returns at most limit entries. Same O(n) tradeoff as pick_swap,
-    recorded there; fine for edge stores.
-    """
+    """Top ranked places from one agent store, best first."""
     if (
         not isinstance(limit, int)
         or isinstance(limit, bool)
         or not 1 <= limit <= 100
     ):
         raise ValueError("limit must be an int in [1, 100]")
-    places: list[Place] = []
-    offset = None
-    while True:
-        page, offset = store.list_places(limit=256, offset=offset)
-        places.extend(page)
-        if offset is None:
-            break
-    return rank_places(places, anchors=anchors)[:limit]
+    return rank_places(store.iter_all(page_size=256), anchors=anchors)[:limit]
+
+
+def vectors_same(a: list[float], b: list[float], tol: float = 1e-4) -> bool:
+    """Direction match tolerant to Qdrant float32 normalize roundtrips."""
+    va = _np.array(a, dtype=float)
+    vb = _np.array(b, dtype=float)
+    na = float(_np.linalg.norm(va))
+    nb = float(_np.linalg.norm(vb))
+    if na == 0.0 or nb == 0.0:
+        return list(a) == list(b)
+    return float(va @ vb / (na * nb)) >= 1.0 - tol
 
 
 # -- Task 11: conflicts + version history -------------------------------
@@ -123,7 +124,7 @@ def _same_place(a: Place, b: Place) -> bool:
         and a.timestamp == b.timestamp
         and a.pose == b.pose
         and a.payload == b.payload
-        and list(a.vector) == list(b.vector)
+        and vectors_same(list(a.vector), list(b.vector))
     )
 
 
