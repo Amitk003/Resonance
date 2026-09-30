@@ -47,15 +47,17 @@ POST /meet/swap picks the small set to send. Body:
 {"agent_id": "robot-a", "limit": 20}
 ```
 
-Returns a list of place records, recent plus high value first.
+Returns slim swap candidates, hazards first.
 
-POST /meet/align takes pairs from both maps and returns the align result. Body:
+POST /meet/align runs one meeting between two agents and logs it. Body:
 
 ```json
-{"pairs": [{"ax": 0.0, "ay": 0.0, "bx": 0.5, "by": 0.1}], "threshold": 0.8}
+{"agent_a": "robot-a", "agent_b": "robot-b"}
 ```
 
-Returns transform plus confidence. No fuse when below threshold.
+Returns the scored merge record with transform, or 400 when the maps share too few places for a consensus. No fuse gate yet.
+
+GET /merges?limit=50 lists past merge records, newest first.
 
 ## Sync
 
