@@ -4,6 +4,7 @@ import { AGENTS, PAGES, type PageKey } from "./common";
 import MemoryPage from "./pages/MemoryPage";
 import MergesPage from "./pages/MergesPage";
 import SearchPage from "./pages/SearchPage";
+import SyncPage from "./pages/SyncPage";
 
 export default function App() {
   const [page, setPage] = useState<PageKey>("memory");
@@ -134,8 +135,15 @@ export default function App() {
           onError={setError}
           onNotice={setNotice}
         />
-      ) : (
+      ) : page === "merges" ? (
         <MergesPage
+          reloadToken={reloadToken}
+          onError={setError}
+          onNotice={setNotice}
+        />
+      ) : (
+        <SyncPage
+          agent={agent}
           reloadToken={reloadToken}
           onError={setError}
           onNotice={setNotice}

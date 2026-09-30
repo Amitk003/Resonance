@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, formatTime, type MergeRecord } from "../api";
+import { api, decideFuse, formatTime, type MergeRecord } from "../api";
 import { AGENTS } from "../common";
 
 interface Props {
@@ -15,11 +15,22 @@ export default function MergesPage({ reloadToken, onError, onNotice }: Props) {
   const [agentA, setAgentA] = useState(AGENTS[0]);
   const [agentB, setAgentB] = useState(AGENTS[1] || AGENTS[0]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [threshold, setThreshold] = useState(0.8);
+  const [draft, setDraft] = useState("0.80");
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
-      setRecords(await api.listMerges(50));
+      const [data, live] = await Promise.all([
+        api.listMerges(50),
+        api.getThreshold(),
+      ]);
+      setRecords(data);
+      setThreshold(live.threshold);
+      setDraft(live.threshold.toFixed(2));
+      setSelectedId((prev) =>
+        prev && data.some((r) => r.id === prev) ? prev : null,
+      );
     } catch (e) {
       onError(e instanceof Error ? e.message : "Load failed");
     } finally {
@@ -49,6 +60,21 @@ export default function MergesPage({ reloadToken, onError, onNotice }: Props) {
       onError(e instanceof Error ? e.message : "Meeting failed");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function saveThreshold() {
+    const value = Number(draft);
+    if (Number.isNaN(value) || value < 0 || value > 1) {
+      onError("Threshold must be a number from 0 to 1.");
+      return;
+    }
+    try {
+      const live = await api.setThreshold(value);
+      setThreshold(live.threshold);
+      onNotice("Fuse threshold saved at " + live.threshold.toFixed(2) + ".");
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Save failed");
     }
   }
 
@@ -108,6 +134,21 @@ export default function MergesPage({ reloadToken, onError, onNotice }: Props) {
 
       <section className="card">
         <h2>Past meetings ({records.length})</h2>
+        <div className="slider-row">
+          <label>Fuse threshold: {Number(draft || 0).toFixed(2)}</label>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={Number.isNaN(Number(draft)) ? threshold : Number(draft)}
+            onChange={(e) => setDraft(e.target.value)}
+            aria-label="Fuse threshold"
+          />
+          <button className="small" onClick={saveThreshold}>
+            Save
+          </button>
+        </div>
         {records.length === 0 && !loading ? (
           <div className="empty">
             No meetings logged yet. Seed both robots, then run one above.
@@ -121,6 +162,7 @@ export default function MergesPage({ reloadToken, onError, onNotice }: Props) {
                 <th>Pairs</th>
                 <th>Inliers</th>
                 <th>Score</th>
+                <th>Verdict</th>
                 <th>Shift dx, dy</th>
               </tr>
             </thead>
@@ -146,6 +188,11 @@ export default function MergesPage({ reloadToken, onError, onNotice }: Props) {
                       />
                     </span>
                     <span className="score">{r.score.toFixed(3)}</span>
+                  </td>
+                  <td>
+                    <span className="badge">
+                      {decideFuse(r.score, threshold) ? "fuse" : "log"}
+                    </span>
                   </td>
                   <td>
                     {r.transform.dx.toFixed(2)}, {r.transform.dy.toFixed(2)}

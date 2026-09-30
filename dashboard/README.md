@@ -42,6 +42,10 @@ Open http://localhost:5173 in a browser.
   search shows clear high and low scores.
 - Merge history page: run a meeting between two agents, see the
   scored record, browse past meetings with transform details.
+- Sync status page: live fuse threshold with save, upload queue
+  with reasons, push to cloud with conflict log, merge verdicts
+  that follow the threshold, export queue, report, and history
+  as JSON files.
 
 Every button calls the API or updates the view. No dead buttons.
 
