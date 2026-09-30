@@ -158,6 +158,16 @@ class MergeRecord(BaseModel):
     transform: Transform
 
 
+class FuseDecision(BaseModel):
+    """Fuse vs log verdict for one merge score (Task 13)."""
+
+    fuse: bool
+    score: float = Field(ge=0.0, le=1.0)
+    threshold: float = Field(ge=0.0, le=1.0)
+    margin: float
+    reason: str
+
+
 def make_pair_id(query_id: str, match_id: str) -> str:
     """Stable key for one matched pair. Later tasks reuse it."""
     return f"{query_id}~{match_id}"
