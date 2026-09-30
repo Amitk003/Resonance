@@ -7,9 +7,12 @@ No threshold gate (Task 13), no endpoint (Task 14), no sync here.
 
 from __future__ import annotations
 
+import logging
 import math
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def _fit_two(a1: np.ndarray, a2: np.ndarray, b1: np.ndarray, b2: np.ndarray) -> tuple[float, float, float]:
@@ -93,7 +96,8 @@ def estimate_transform(
         i, j = rng.choice(n, size=2, replace=False)
         try:
             dx, dy, dt = _fit_two(a[i], a[j], b[i], b[j])
-        except Exception:
+        except Exception as exc:
+            logger.debug("RANSAC sample skipped: %s", exc)
             continue
         err = np.linalg.norm(_apply(b, dx, dy, dt) - a, axis=1)
         idx = np.nonzero(err < inlier_thresh)[0]

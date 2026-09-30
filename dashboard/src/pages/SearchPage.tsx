@@ -496,6 +496,7 @@ export default function SearchPage({ agent, reloadToken, onError, onNotice }: Pr
         <section className="card">
           <h2>Match details</h2>
           <DetailPanel
+            key={selected ? selected.id : "none"}
             place={selected}
             onChanged={handleChanged}
             onError={onError}

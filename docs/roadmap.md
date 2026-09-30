@@ -11,8 +11,8 @@ One task per line. Each task has one owner.
 7. Upload order by value for cloud sync - Person 3
 8. Search results page in dashboard - Person 4
 9. Nearest neighbor match between two agents - Person 1
-10. Shape check and rigid transform - Person 2
-11. Conflict fix plus version history - Person 3
+10. Shape check and rigid transform - Person 1
+11. Conflict fix plus version history - Person 1
 12. Merge history page in dashboard - Person 4
 13. Confidence score and threshold logic - Person 1
 14. Backend APIs for meeting and sync queue - Person 2
