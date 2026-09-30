@@ -59,6 +59,14 @@ Returns the scored merge record with transform, or 400 when the maps share too f
 
 GET /merges?limit=50 lists past merge records, newest first.
 
+## Sync queue
+
+GET /sync/queue?agent_id=robot-a&limit=20 returns ranked upload rows
+with place, score, and reasons. Anchors come from the merge history
+of that agent, so aligned places rise on their own.
+
+Push to the server stays in a later task.
+
 ## Sync
 
 GET /sync/queue lists items ranked by value.
