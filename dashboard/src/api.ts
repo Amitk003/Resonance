@@ -214,6 +214,17 @@ export function formatTime(timestamp: number): string {
   }
 }
 
+export function formatTimeShort(timestamp: number): string {
+  try {
+    const d = new Date(timestamp * 1000);
+    const date = d.toLocaleDateString();
+    const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return date + " " + time;
+  } catch {
+    return String(timestamp);
+  }
+}
+
 export interface SyncItem {
   place: Place;
   score: number;

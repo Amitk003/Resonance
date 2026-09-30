@@ -256,8 +256,15 @@ select:focus {
 
 /* Table */
 
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+
 table.grid {
   width: 100%;
+  min-width: 680px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -267,12 +274,18 @@ table.grid td {
   text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid var(--line);
+  vertical-align: middle;
 }
 
 table.grid th {
   color: var(--muted);
   font-weight: 600;
   font-size: 12px;
+  white-space: nowrap;
+}
+
+table.grid td.nowrap {
+  white-space: nowrap;
 }
 
 table.grid tr.selected td {
@@ -285,7 +298,7 @@ table.grid tr:hover td {
 
 .conf-bar {
   display: inline-block;
-  width: 70px;
+  width: 48px;
   height: 8px;
   background: var(--panel2);
   border: 1px solid var(--line);
@@ -385,6 +398,7 @@ pre.json {
 .slider-row input[type="range"] {
   flex: 1;
   padding: 0;
+  accent-color: var(--accent);
 }
 
 /* Form */

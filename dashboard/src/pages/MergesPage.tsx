@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, decideFuse, formatTime, type MergeRecord } from "../api";
+import { api, decideFuse, formatTimeShort, type MergeRecord } from "../api";
 import ThresholdControl from "../components/ThresholdControl";
 
 interface Props {
@@ -136,53 +136,55 @@ export default function MergesPage({ agents, reloadToken, onError, onNotice }: P
             No meetings logged yet. Seed both robots, then run one above.
           </div>
         ) : (
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Pair</th>
-                <th>Pairs</th>
-                <th>Inliers</th>
-                <th>Score</th>
-                <th>Verdict</th>
-                <th>Shift dx, dy</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r) => (
-                <tr
-                  key={r.id}
-                  className={r.id === selectedId ? "selected" : ""}
-                  onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <td>{formatTime(r.timestamp)}</td>
-                  <td>
-                    {r.agent_a} + {r.agent_b}
-                  </td>
-                  <td>{r.pairs_total}</td>
-                  <td>{r.inliers}</td>
-                  <td>
-                    <span className="conf-bar">
-                      <span
-                        className="conf-fill"
-                        style={{ width: Math.round(r.score * 100) + "%" }}
-                      />
-                    </span>
-                    <span className="score">{r.score.toFixed(3)}</span>
-                  </td>
-                  <td>
-                    <span className="badge">
-                      {decideFuse(r.score, threshold) ? "fuse" : "log"}
-                    </span>
-                  </td>
-                  <td>
-                    {r.transform.dx.toFixed(2)}, {r.transform.dy.toFixed(2)}
-                  </td>
+          <div className="table-scroll">
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Pair</th>
+                  <th>Pairs</th>
+                  <th>Inliers</th>
+                  <th>Score</th>
+                  <th>Verdict</th>
+                  <th>Shift dx, dy</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {records.map((r) => (
+                  <tr
+                    key={r.id}
+                    className={r.id === selectedId ? "selected" : ""}
+                    onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td className="nowrap">{formatTimeShort(r.timestamp)}</td>
+                    <td className="nowrap">
+                      {r.agent_a} + {r.agent_b}
+                    </td>
+                    <td>{r.pairs_total}</td>
+                    <td>{r.inliers}</td>
+                    <td className="nowrap">
+                      <span className="conf-bar">
+                        <span
+                          className="conf-fill"
+                          style={{ width: Math.round(r.score * 100) + "%" }}
+                        />
+                      </span>
+                      <span className="score">{r.score.toFixed(3)}</span>
+                    </td>
+                    <td>
+                      <span className="badge">
+                        {decideFuse(r.score, threshold) ? "fuse" : "log"}
+                      </span>
+                    </td>
+                    <td className="nowrap">
+                      {r.transform.dx.toFixed(2)}, {r.transform.dy.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
