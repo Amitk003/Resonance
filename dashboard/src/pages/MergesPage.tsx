@@ -172,7 +172,7 @@ export default function MergesPage({ agents, reloadToken, onError, onNotice }: P
                     <span className="score">{r.score.toFixed(3)}</span>
                   </td>
                   <td>
-                    <span className="badge">
+                    <span className={"badge " + (decideFuse(r.score, threshold) ? "fuse" : "log")}>
                       {decideFuse(r.score, threshold) ? "fuse" : "log"}
                     </span>
                   </td>
