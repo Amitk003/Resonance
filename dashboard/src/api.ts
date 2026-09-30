@@ -32,6 +32,24 @@ export interface SearchHit {
   place: Place;
 }
 
+export interface Transform {
+  dx: number;
+  dy: number;
+  dtheta: number;
+}
+
+export interface MergeRecord {
+  id: string;
+  timestamp: number;
+  agent_a: string;
+  agent_b: string;
+  pairs_total: number;
+  inliers: number;
+  mean_score: number;
+  score: number;
+  transform: Transform;
+}
+
 export interface PlaceList {
   places: Place[];
   next_offset: unknown;
@@ -132,6 +150,19 @@ export const api = {
     return request("/memory/" + encodeURIComponent(place_id) + "?" + q.toString(), {
       method: "DELETE",
     });
+  },
+  runAlign(params: {
+    agent_a: string;
+    agent_b: string;
+    swap_limit?: number;
+    top_k?: number;
+    min_score?: number;
+  }): Promise<MergeRecord> {
+    return request("/meet/align", { method: "POST", body: JSON.stringify(params) });
+  },
+  listMerges(limit = 50): Promise<MergeRecord[]> {
+    const q = new URLSearchParams({ limit: String(limit) });
+    return request("/merges?" + q.toString());
   },
 };
 

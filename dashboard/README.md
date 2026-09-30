@@ -40,6 +40,8 @@ Open http://localhost:5173 in a browser.
 - Add place: form with input checks, vector is fresh random or near
   the selected place. Seed demo adds 18 clustered places so similar
   search shows clear high and low scores.
+- Merge history page: run a meeting between two agents, see the
+  scored record, browse past meetings with transform details.
 
 Every button calls the API or updates the view. No dead buttons.
 
