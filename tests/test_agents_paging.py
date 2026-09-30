@@ -17,7 +17,7 @@ def client(tmp_path):
 
 
 def test_agents_empty_then_lists_both(client):
-    assert client.get("/agents").json() == {"agents": []}
+    assert client.get("/agents").json() == []
     assert (
         client.post("/memory/add", json=make_place_payload(agent="robot-a")).status_code
         == 200
@@ -26,7 +26,7 @@ def test_agents_empty_then_lists_both(client):
         client.post("/memory/add", json=make_place_payload(agent="robot-b")).status_code
         == 200
     )
-    assert client.get("/agents").json() == {"agents": ["robot-a", "robot-b"]}
+    assert client.get("/agents").json() == ["robot-a", "robot-b"]
 
 
 def test_list_pages_with_offset(client):

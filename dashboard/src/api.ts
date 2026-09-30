@@ -128,6 +128,9 @@ export const api = {
   addPlace(place: Place): Promise<{ id: string }> {
     return request("/memory/add", { method: "POST", body: JSON.stringify(place) });
   },
+  bulkAddPlaces(places: Place[]): Promise<{ ids: string[] }> {
+    return request("/memory/bulk", { method: "POST", body: JSON.stringify(places) });
+  },
   search(params: {
     agent_id: string;
     vector: number[];
