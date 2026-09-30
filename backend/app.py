@@ -12,6 +12,8 @@ Endpoints (see docs/api.md):
     PUT    /memory/{id}     -> body Place, path id must match, returns {"id"}
     DELETE /memory/{id}     -> query agent_id, returns {"deleted": true} or 404
     POST   /meet/swap       -> body agent_id + limit, returns [SwapCandidate]
+    POST   /meet/align      -> body two agents, runs meeting, logs MergeRecord
+    GET    /merges          -> query limit, newest first merge history
 
 Run:
     uvicorn backend.app:app --port 8000
@@ -27,7 +29,14 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from edge.models import Place, SwapCandidate, validate_str_list, validate_vector
+from edge.merges import MergeLog, run_meeting
+from edge.models import (
+    MergeRecord,
+    Place,
+    SwapCandidate,
+    validate_str_list,
+    validate_vector,
+)
 from edge.store import PlaceStore
 
 
@@ -92,6 +101,22 @@ class MeetSwapRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
+class MeetAlignRequest(BaseModel):
+    """Run one meeting between two agents and log it (Task 12)."""
+
+    agent_a: str = Field(min_length=1)
+    agent_b: str = Field(min_length=1)
+    swap_limit: int = Field(default=20, ge=1, le=100)
+    top_k: int = Field(default=1, ge=1, le=20)
+    min_score: float = Field(default=0.0, ge=-1.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _validate_pair(self) -> MeetAlignRequest:
+        if self.agent_a == self.agent_b:
+            raise ValueError("agent_a and agent_b must differ")
+        return self
+
+
 def create_app(storage_root: Path | str | None = None) -> FastAPI:
     """Build the FastAPI app. storage_root isolates tests via tmp_path."""
 
@@ -113,6 +138,9 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
     app.state.storage_root = storage_root
     stores: dict[str, PlaceStore] = {}
     app.state.stores = stores
+    app.state.merge_log = MergeLog(
+        Path(storage_root) / "merges.json" if storage_root is not None else None
+    )
 
     def get_store(agent_id: str) -> PlaceStore:
         if not agent_id or not agent_id.strip():
@@ -205,6 +233,34 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
         store = get_store(req.agent_id)
         try:
             return store.pick_swap(limit=req.limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/meet/align", response_model=MergeRecord)
+    def meet_align(req: MeetAlignRequest) -> MergeRecord:
+        store_a = get_store(req.agent_a)
+        store_b = get_store(req.agent_b)
+        try:
+            record = run_meeting(
+                store_a,
+                store_b,
+                swap_limit=req.swap_limit,
+                top_k=req.top_k,
+                min_score=req.min_score,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if record is None:
+            raise HTTPException(
+                status_code=400, detail="no consensus between the two maps"
+            )
+        app.state.merge_log.append(record)
+        return record
+
+    @app.get("/merges", response_model=list[MergeRecord])
+    def merge_history(limit: int = Query(default=50, ge=1, le=200)) -> list[MergeRecord]:
+        try:
+            return app.state.merge_log.list(limit=limit)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
