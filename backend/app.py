@@ -24,6 +24,7 @@ Run:
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from edge.fuse import DEFAULT_FUSE_THRESHOLD
+from edge.cloud import CloudSync
 from edge.merges import MergeLog, run_meeting
 from edge.models import (
     MergeRecord,
@@ -134,6 +136,31 @@ class ThresholdSet(BaseModel):
     """Live fuse threshold, moved by operators (Task 16 uses this)."""
 
     threshold: float = Field(ge=0.0, le=1.0)
+
+
+class ConflictEntry(BaseModel):
+    """One conflict decision served to the dashboard log."""
+
+    id: str
+    winner_id: str
+    loser_id: str
+    reason: str
+
+
+class SyncPushRequest(BaseModel):
+    """Push ranked places to the shared server (Task 15)."""
+
+    agent_id: str = Field(min_length=1)
+    limit: int = Field(default=20, ge=1, le=100)
+    server_url: str | None = Field(default=None)
+
+
+class SyncPushResponse(BaseModel):
+    """Outcome counts plus every conflict decision of one push."""
+
+    uploaded: int
+    unchanged: int
+    conflicts: list[ConflictEntry]
 
 
 def create_app(storage_root: Path | str | None = None) -> FastAPI:
@@ -316,6 +343,29 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
     def set_threshold(body: ThresholdSet) -> dict[str, float]:
         app.state.fuse_threshold = body.threshold
         return {"threshold": app.state.fuse_threshold}
+
+    @app.post("/sync/push", response_model=SyncPushResponse)
+    def sync_push(req: SyncPushRequest) -> SyncPushResponse:
+        store = get_store(req.agent_id)
+        try:
+            ranked = select_upload(
+                store, limit=req.limit, anchors=agent_anchors(req.agent_id)
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        url = req.server_url or os.environ.get("QDRANT_URL", "http://localhost:6333")
+        try:
+            cloud = CloudSync(url=url, timeout=3)
+            report = cloud.push_many([place for place, _, _ in ranked])
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503, detail=f"cloud unreachable at {url}: {exc}"
+            ) from exc
+        return SyncPushResponse(
+            uploaded=report.uploaded,
+            unchanged=report.unchanged,
+            conflicts=[ConflictEntry(**vars(log)) for log in report.conflicts],
+        )
 
     return app
 

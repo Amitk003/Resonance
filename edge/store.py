@@ -53,6 +53,11 @@ def _qdrant_point_id(place_id: str) -> str:
     return str(uuid5(_POINT_ID_NAMESPACE, place_id))
 
 
+def point_id_for(place_id: str) -> str:
+    """Public point id mapping shared with the cloud sync (Task 15)."""
+    return _qdrant_point_id(place_id)
+
+
 def _place_from_record(
     payload: dict[str, Any] | None,
     vector: Any,
@@ -84,6 +89,15 @@ def _place_from_record(
         )
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def place_from_record(
+    payload: dict[str, Any] | None,
+    vector: Any,
+    fallback_agent: str,
+) -> Place | None:
+    """Public record rebuild shared with the cloud sync (Task 15)."""
+    return _place_from_record(payload, vector, fallback_agent)
 
 
 def _place_payload(place: Place) -> dict:
