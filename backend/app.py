@@ -14,6 +14,9 @@ Endpoints (see docs/api.md):
     POST   /meet/swap       -> body agent_id + limit, returns [SwapCandidate]
     POST   /meet/align      -> body two agents, runs meeting, logs MergeRecord
     GET    /merges          -> query limit, newest first merge history
+    GET    /sync/queue      -> query agent_id + limit, ranked upload rows
+    GET    /fuse/threshold  -> live fuse threshold
+    PUT    /fuse/threshold  -> body threshold 0 to 1, moved by operators
 
 Run:
     uvicorn backend.app:app --port 8000
@@ -29,6 +32,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from edge.fuse import DEFAULT_FUSE_THRESHOLD
 from edge.merges import MergeLog, run_meeting
 from edge.models import (
     MergeRecord,
@@ -38,6 +42,7 @@ from edge.models import (
     validate_vector,
 )
 from edge.store import PlaceStore
+from edge.sync import select_upload
 
 
 class SearchRequest(BaseModel):
@@ -117,6 +122,20 @@ class MeetAlignRequest(BaseModel):
         return self
 
 
+class SyncItem(BaseModel):
+    """One upload queue row: the place, its score, and why."""
+
+    place: Place
+    score: float
+    reasons: list[str]
+
+
+class ThresholdSet(BaseModel):
+    """Live fuse threshold, moved by operators (Task 16 uses this)."""
+
+    threshold: float = Field(ge=0.0, le=1.0)
+
+
 def create_app(storage_root: Path | str | None = None) -> FastAPI:
     """Build the FastAPI app. storage_root isolates tests via tmp_path."""
 
@@ -141,6 +160,15 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
     app.state.merge_log = MergeLog(
         Path(storage_root) / "merges.json" if storage_root is not None else None
     )
+    app.state.fuse_threshold = DEFAULT_FUSE_THRESHOLD
+
+    def agent_anchors(agent_id: str) -> frozenset[str]:
+        """Place ids that helped align this agent's maps so far."""
+        found: set[str] = set()
+        for record in app.state.merge_log.list(limit=200):
+            if record.agent_a == agent_id or record.agent_b == agent_id:
+                found.update(record.anchor_ids)
+        return frozenset(found)
 
     def get_store(agent_id: str) -> PlaceStore:
         if not agent_id or not agent_id.strip():
@@ -263,6 +291,31 @@ def create_app(storage_root: Path | str | None = None) -> FastAPI:
             return app.state.merge_log.list(limit=limit)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/sync/queue", response_model=list[SyncItem])
+    def sync_queue(
+        agent_id: str, limit: int = Query(default=20, ge=1, le=100)
+    ) -> list[SyncItem]:
+        store = get_store(agent_id)
+        try:
+            ranked = select_upload(
+                store, limit=limit, anchors=agent_anchors(agent_id)
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return [
+            SyncItem(place=place, score=score, reasons=reasons)
+            for place, score, reasons in ranked
+        ]
+
+    @app.get("/fuse/threshold")
+    def get_threshold() -> dict[str, float]:
+        return {"threshold": app.state.fuse_threshold}
+
+    @app.put("/fuse/threshold")
+    def set_threshold(body: ThresholdSet) -> dict[str, float]:
+        app.state.fuse_threshold = body.threshold
+        return {"threshold": app.state.fuse_threshold}
 
     return app
 
