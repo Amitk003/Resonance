@@ -131,6 +131,33 @@ def place_to_swap_candidate(place: Place) -> SwapCandidate:
     )
 
 
+class Transform(BaseModel):
+    """Rigid move of map B into map A: shift plus heading change."""
+
+    dx: float
+    dy: float
+    dtheta: float
+
+
+class MergeRecord(BaseModel):
+    """One finished meeting between two agents (Task 12).
+
+    score blends the mean vector match with the shape fit, so 1.0
+    means same places and same shape. No fuse gate here; Task 13
+    decides fuse vs log from this score.
+    """
+
+    id: str = Field(min_length=1)
+    timestamp: int = Field(ge=0)
+    agent_a: str = Field(min_length=1)
+    agent_b: str = Field(min_length=1)
+    pairs_total: int = Field(ge=0)
+    inliers: int = Field(ge=0)
+    mean_score: float
+    score: float = Field(ge=0.0, le=1.0)
+    transform: Transform
+
+
 def make_pair_id(query_id: str, match_id: str) -> str:
     """Stable key for one matched pair. Later tasks reuse it."""
     return f"{query_id}~{match_id}"
